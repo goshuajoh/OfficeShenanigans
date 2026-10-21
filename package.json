@@ -1,0 +1,12 @@
+{
+  "name": "office-shenanigans",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Disguised office games: idle RPG, spreadsheet minesweeper, terminal games and an Excel mystery.",
+  "scripts": {
+    "start": "node server/leaderboard.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

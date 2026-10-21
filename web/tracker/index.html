@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Atlas · Q4 Delivery Tracker</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230c66e4'/%3E%3Cpath d='M9 22 16 8l7 14h-4l-3-6-3 6z' fill='white'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand"><span class="logo">▲</span> Atlas <span class="muted">/ Delivery</span></div>
+  <div class="search"><input type="text" placeholder="Search issues, projects, people…" aria-label="Search"></div>
+  <div class="top-right">
+    <span class="pill" id="sprintPill">Sprint 1 · 1/10</span>
+    <button class="icon-btn" id="decoyBtn" title="Switch to report view (Esc)">⧉</button>
+    <div class="avatar" id="avatar">?</div>
+  </div>
+</header>
+
+<div class="layout">
+  <nav class="sidebar">
+    <div class="nav-section">PLANNING</div>
+    <a class="nav active" data-tab="resources">Resource requests</a>
+    <a class="nav" data-tab="policies">Policies</a>
+    <div class="nav-section">REPORTING</div>
+    <a class="nav" data-tab="compliance">Compliance <span class="count" id="achCount">0</span></a>
+    <a class="nav" data-tab="leaderboard">Org rankings</a>
+    <a class="nav" data-tab="settings">Settings</a>
+    <div class="nav-footer muted">Space: log work · 1/2: rituals · Esc: report view</div>
+  </nav>
+
+  <main class="main">
+    <section class="col-left">
+      <div class="card ticket" id="ticketCard">
+        <div class="ticket-head">
+          <span class="type" id="tType">Story</span>
+          <span class="key" id="tKey">ATL-1000</span>
+          <span class="spacer"></span>
+          <span class="deadline hidden" id="tDeadline">SLA 30s</span>
+        </div>
+        <h2 id="tTitle">Loading…</h2>
+        <div class="fields">
+          <div><label>Assignee</label><span id="tAssignee">You</span></div>
+          <div><label>Priority</label><span id="tPriority">Medium</span></div>
+          <div><label>Story points remaining</label><span id="tHp">10 / 10</span></div>
+        </div>
+        <div class="bar"><div class="fill" id="tBar"></div></div>
+        <div class="actions">
+          <button class="btn primary" id="workBtn">Log work</button>
+          <button class="btn" id="standupBtn" title="Team velocity ×3 for 15s (key 1)">Call stand-up</button>
+          <button class="btn" id="crunchBtn" title="Your output ×5 for 10s (key 2)">Crunch mode</button>
+        </div>
+        <div id="floaters"></div>
+      </div>
+
+      <div class="kpis">
+        <div class="kpi"><label>Your output</label><b id="kClick">1</b><span>SP / action</span></div>
+        <div class="kpi"><label>Team velocity</label><b id="kDps">0</b><span>SP / sec</span></div>
+        <div class="kpi"><label>Budget</label><b id="kBudget">$0</b><span>available</span></div>
+        <div class="kpi"><label>Equity</label><b id="kEquity">0</b><span>shares</span></div>
+      </div>
+
+      <div class="card profile">
+        <div class="avatar big" id="avatarBig">?</div>
+        <div class="grow">
+          <div class="pname" id="pName">New hire</div>
+          <div class="muted" id="pTitle">Intern · Level 1</div>
+          <div class="bar thin"><div class="fill" id="xpBar"></div></div>
+          <div class="muted small" id="xpText">Performance review: 0 / 30</div>
+        </div>
+        <button class="btn hidden" id="reorgBtn" title="Reset progress for equity">Accept reorg</button>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Activity</div>
+        <ul class="feed" id="feed"></ul>
+      </div>
+    </section>
+
+    <section class="col-right card" id="panel">
+      <div class="tab" id="tab-resources">
+        <div class="card-title">Resource requests
+          <span class="seg" id="buyQty"><button data-q="1" class="on">×1</button><button data-q="10">×10</button><button data-q="max">Max</button></span>
+        </div>
+        <div class="muted small">Headcount increases team velocity. Equipment increases your output.</div>
+        <h4>Headcount</h4>
+        <div id="hireList" class="shop"></div>
+        <h4>Equipment</h4>
+        <div id="gearList" class="shop"></div>
+      </div>
+
+      <div class="tab hidden" id="tab-policies">
+        <div class="card-title">Policies</div>
+        <div class="muted small">One-time organisational changes.</div>
+        <div id="policyList" class="shop"></div>
+      </div>
+
+      <div class="tab hidden" id="tab-compliance">
+        <div class="card-title">Compliance badges</div>
+        <div class="muted small">Each badge grants +1% to all output.</div>
+        <div id="achList" class="badges"></div>
+      </div>
+
+      <div class="tab hidden" id="tab-leaderboard">
+        <div class="card-title">Org rankings <span class="muted small" id="lbSource"></span></div>
+        <div class="muted small">Ranked by lifetime story points delivered.</div>
+        <div class="row"><button class="btn primary" id="lbSubmit">Submit my numbers</button><button class="btn" id="lbRefresh">Refresh</button></div>
+        <table class="table"><thead><tr><th>#</th><th>Name</th><th>Delivered</th><th>Role</th></tr></thead><tbody id="lbBody"></tbody></table>
+      </div>
+
+      <div class="tab hidden" id="tab-settings">
+        <div class="card-title">Settings</div>
+        <label class="field">Display name <input id="setName" maxlength="20" placeholder="Your name"></label>
+        <label class="check"><input type="checkbox" id="setStealth"> Stealth mode (monochrome icons, quiet effects)</label>
+        <label class="check"><input type="checkbox" id="setTitle"> Show progress in browser tab title</label>
+        <div class="row">
+          <button class="btn" id="exportBtn">Export save</button>
+          <button class="btn" id="importBtn">Import save</button>
+          <button class="btn danger" id="resetBtn">Hard reset</button>
+        </div>
+        <textarea id="saveBox" class="hidden" rows="4" placeholder="Paste save here, then click Import again"></textarea>
+        <p class="muted small">Progress saves automatically in this browser. Press <kbd>Esc</kbd> or <kbd>`</kbd> any time to flip to a boring report.</p>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div class="ping hidden" id="ping">
+  <div class="ping-head"><span class="dot"></span><b id="pingFrom">@manager</b><span class="muted small">now</span></div>
+  <div id="pingMsg">quick sync?</div>
+</div>
+
+<div class="toast hidden" id="toast"></div>
+
+<div class="modal hidden" id="modal">
+  <div class="modal-box">
+    <h3 id="modalTitle"></h3>
+    <div id="modalBody"></div>
+    <div class="row right"><button class="btn primary" id="modalOk">OK</button></div>
+  </div>
+</div>
+
+<!-- Boss-key decoy -->
+<div class="decoy hidden" id="decoy">
+  <div class="decoy-page">
+    <div class="decoy-head">
+      <div><div class="muted small">Atlas Reports · Finance &amp; Operations</div><h1>Quarterly Business Review — Q4 FY26</h1></div>
+      <div class="muted small">Last refreshed 09:12 · Confidential</div>
+    </div>
+    <div class="decoy-kpis">
+      <div><label>Revenue (QTD)</label><b>$14.82M</b><span class="up">▲ 3.1% vs plan</span></div>
+      <div><label>Gross margin</label><b>61.4%</b><span class="down">▼ 0.6 pts</span></div>
+      <div><label>Opex</label><b>$6.07M</b><span class="up">▼ 1.9% vs plan</span></div>
+      <div><label>Headcount</label><b>412</b><span class="muted">+7 QoQ</span></div>
+    </div>
+    <svg class="decoy-chart" viewBox="0 0 600 180" preserveAspectRatio="none" aria-hidden="true">
+      <g fill="#8fb3e8"><rect x="20" y="70" width="34" height="100"/><rect x="70" y="60" width="34" height="110"/><rect x="120" y="80" width="34" height="90"/><rect x="170" y="50" width="34" height="120"/><rect x="220" y="55" width="34" height="115"/><rect x="270" y="40" width="34" height="130"/><rect x="320" y="45" width="34" height="125"/><rect x="370" y="35" width="34" height="135"/><rect x="420" y="38" width="34" height="132"/><rect x="470" y="28" width="34" height="142"/><rect x="520" y="30" width="34" height="140"/></g>
+      <polyline fill="none" stroke="#0c66e4" stroke-width="2" points="37,90 87,82 137,95 187,70 237,72 287,60 337,63 387,52 437,55 487,44 537,46"/>
+    </svg>
+    <table class="table">
+      <thead><tr><th>Business unit</th><th>Plan</th><th>Actual</th><th>Variance</th><th>Owner</th><th>Status</th></tr></thead>
+      <tbody>
+        <tr><td>Enterprise Sales</td><td>$5,200,000</td><td>$5,390,412</td><td>+3.7%</td><td>R. Okafor</td><td>On track</td></tr>
+        <tr><td>Mid-Market</td><td>$3,100,000</td><td>$2,987,220</td><td>-3.6%</td><td>L. Chen</td><td>At risk</td></tr>
+        <tr><td>Self-Serve</td><td>$2,450,000</td><td>$2,611,904</td><td>+6.6%</td><td>M. Duarte</td><td>On track</td></tr>
+        <tr><td>Professional Services</td><td>$1,900,000</td><td>$1,874,100</td><td>-1.4%</td><td>S. Patel</td><td>Monitoring</td></tr>
+        <tr><td>Partnerships</td><td>$1,750,000</td><td>$1,960,018</td><td>+12.0%</td><td>J. Weiss</td><td>On track</td></tr>
+        <tr><td>Support Renewals</td><td>$1,000,000</td><td>$998,450</td><td>-0.2%</td><td>K. Novak</td><td>On track</td></tr>
+      </tbody>
+    </table>
+    <p class="muted small">Figures are preliminary and subject to change pending month-end close. Do not distribute externally.</p>
+  </div>
+</div>
+
+<script src="../config.js"></script>
+<script src="../shared/leaderboard.js"></script>
+<script src="game.js"></script>
+</body>
+</html>

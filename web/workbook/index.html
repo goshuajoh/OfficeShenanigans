@@ -1,0 +1,417 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FY26_Budget_Forecast_v3_FINAL(2).xlsx</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='4' fill='%23107c41'/%3E%3Cpath d='M9 9h4l3 5 3-5h4l-5 7 5 7h-4l-3-5-3 5H9l5-7z' fill='white'/%3E%3C/svg%3E">
+<style>
+  :root { --green: #107c41; --grid: #e1e1e1; --head: #f3f3f3; --sel: #107c41; --text: #222; font-family: "Segoe UI", Calibri, Arial, sans-serif; font-size: 13px; color: var(--text); }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #fff; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+  .titlebar { background: var(--green); color: #fff; height: 34px; display: flex; align-items: center; padding: 0 12px; gap: 14px; font-size: 12px; }
+  .titlebar .file { flex: 1; text-align: center; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .menus { display: flex; gap: 2px; padding: 0 8px; background: #f8f8f8; border-bottom: 1px solid #ddd; font-size: 12px; overflow-x: auto; }
+  .menus span { padding: 6px 10px; cursor: default; white-space: nowrap; }
+  .menus span.on { border-bottom: 2px solid var(--green); color: var(--green); font-weight: 600; }
+  .ribbon { display: flex; gap: 18px; padding: 6px 12px; background: #f8f8f8; border-bottom: 1px solid #ddd; font-size: 11px; color: #444; overflow-x: auto; }
+  .group { display: flex; flex-direction: column; align-items: center; gap: 2px; border-right: 1px solid #e0e0e0; padding-right: 16px; white-space: nowrap; }
+  .group .btns { display: flex; gap: 4px; }
+  .group button { border: 1px solid transparent; background: none; padding: 3px 6px; font: inherit; font-size: 12px; cursor: pointer; border-radius: 2px; }
+  .group button:hover { background: #e6e6e6; border-color: #ccc; }
+  .group .lbl { color: #777; font-size: 10px; }
+  .fbar { display: flex; align-items: center; border-bottom: 1px solid #ddd; height: 28px; }
+  .namebox { width: 90px; border-right: 1px solid #ddd; padding: 0 8px; height: 100%; display: flex; align-items: center; font-size: 12px; }
+  .fx { color: #777; padding: 0 10px; font-style: italic; border-right: 1px solid #ddd; height: 100%; display: flex; align-items: center; }
+  .formula { padding: 0 10px; font-family: Consolas, monospace; font-size: 12px; white-space: nowrap; overflow: hidden; }
+  .sheetwrap { flex: 1; overflow: auto; position: relative; }
+  table.grid { border-collapse: collapse; table-layout: fixed; user-select: none; }
+  .grid th { background: var(--head); color: #555; font-weight: normal; font-size: 11px; border: 1px solid #d4d4d4; position: sticky; z-index: 1; }
+  .grid thead th { top: 0; height: 20px; }
+  .grid tbody th { left: 0; width: 40px; }
+  .grid thead th:first-child { left: 0; z-index: 2; width: 40px; }
+  .grid th.hl { background: #d2e8d9; color: var(--green); font-weight: 600; }
+  .grid td { border: 1px solid var(--grid); width: 64px; min-width: 64px; height: 20px; padding: 0 4px; text-align: right; white-space: nowrap; overflow: hidden; font-size: 12px; cursor: cell; }
+  .grid td.sel { outline: 2px solid var(--sel); outline-offset: -2px; }
+  td.hid { color: #9a9a9a; }
+  td.rev { color: transparent; background: #f6f8f6; }
+  td.n1 { color: #1f4e79; background: #eaf1fb; }
+  td.n2 { color: #375623; background: #e2efda; }
+  td.n3 { color: #833c0b; background: #fce4d6; }
+  td.n4 { color: #7030a0; background: #ede1f5; }
+  td.n5, td.n6, td.n7, td.n8 { color: #9c0006; background: #ffc7ce; }
+  td.num { font-weight: 600; text-align: center; }
+  td.flag { color: #9c5700; background: #ffeb9c; text-align: center; }
+  td.mine { color: #c00000; font-weight: 600; text-align: center; }
+  td.boom { background: #ffc7ce; }
+  td.wrongflag { color: #c00000; text-decoration: line-through; text-align: center; }
+  .tabs { display: flex; align-items: center; border-top: 1px solid #ddd; background: #f3f3f3; height: 30px; font-size: 12px; overflow-x: auto; }
+  .tabs .nav { color: #888; padding: 0 10px; }
+  .tab { padding: 0 14px; height: 100%; display: flex; align-items: center; cursor: pointer; border-right: 1px solid #ddd; white-space: nowrap; }
+  .tab.on { background: #fff; color: var(--green); font-weight: 600; border-bottom: 2px solid var(--green); }
+  .status { display: flex; gap: 22px; background: var(--green); color: #fff; font-size: 11px; height: 22px; align-items: center; padding: 0 12px; white-space: nowrap; overflow: hidden; }
+  .status .r { margin-left: auto; display: flex; gap: 22px; }
+  .hidden { display: none !important; }
+  .dialog { position: fixed; inset: 0; background: rgba(0,0,0,.25); display: grid; place-items: center; z-index: 10; }
+  .dialog-box { background: #fff; border: 1px solid #aaa; box-shadow: 0 8px 24px rgba(0,0,0,.25); width: min(380px, 92vw); font-size: 13px; }
+  .dialog-box .dh { background: #f3f3f3; padding: 8px 12px; border-bottom: 1px solid #ddd; font-weight: 600; }
+  .dialog-box .db { padding: 14px 12px; }
+  .dialog-box input { width: 100%; padding: 4px 6px; border: 1px solid #aaa; font: inherit; margin-top: 6px; }
+  .dialog-box .df { padding: 8px 12px; display: flex; justify-content: flex-end; gap: 6px; border-top: 1px solid #eee; }
+  .dialog-box button { padding: 4px 16px; border: 1px solid #aaa; background: #f6f6f6; font: inherit; cursor: pointer; }
+  .dialog-box button.primary { background: var(--green); border-color: var(--green); color: #fff; }
+  .help td, .lb td { color: var(--text); text-align: left; }
+  .lb td.r { text-align: right; }
+  .help b { color: var(--green); }
+</style>
+</head>
+<body>
+<div class="titlebar"><span>AutoSave ● Off</span><span>💾 ↶ ↷</span><span class="file" id="fileName">FY26_Budget_Forecast_v3_FINAL(2).xlsx — Saved to this PC</span><span>🔍 Search</span></div>
+<div class="menus"><span>File</span><span class="on">Home</span><span>Insert</span><span>Page Layout</span><span>Formulas</span><span>Data</span><span>Review</span><span>View</span><span>Help</span></div>
+<div class="ribbon">
+  <div class="group"><div class="btns"><button>📋 Paste</button><button>✂</button><button>⎘</button></div><span class="lbl">Clipboard</span></div>
+  <div class="group"><div class="btns"><button><b>B</b></button><button><i>I</i></button><button><u>U</u></button><button>Calibri ▾</button><button>11 ▾</button></div><span class="lbl">Font</span></div>
+  <div class="group"><div class="btns"><button>≡</button><button>⇔ Merge</button><button>↵ Wrap</button></div><span class="lbl">Alignment</span></div>
+  <div class="group"><div class="btns"><button>$</button><button>%</button><button>,</button><button>.0→.00</button></div><span class="lbl">Number</span></div>
+  <div class="group"><div class="btns"><button id="newBtn" title="Start a new reconciliation (F2)">↻ Refresh All</button><button id="helpBtn">ⓘ Notes</button></div><span class="lbl">Data</span></div>
+</div>
+<div class="fbar"><div class="namebox" id="nameBox">A1</div><div class="fx">fx</div><div class="formula" id="formula"></div></div>
+<div class="sheetwrap" id="wrap"><table class="grid" id="grid"></table></div>
+<div class="tabs" id="tabs">
+  <span class="nav">◀ ▶</span>
+  <div class="tab on" data-sheet="q1">Q1_Forecast</div>
+  <div class="tab" data-sheet="q2">Q2_Forecast</div>
+  <div class="tab" data-sheet="q3">Q3_Forecast</div>
+  <div class="tab" data-sheet="rank">Approvals</div>
+  <div class="tab" data-sheet="help">Notes</div>
+  <span class="nav">⊕</span>
+</div>
+<div class="status"><span id="stReady">Ready</span><span id="stMode">Accessibility: Good to go</span><span class="r"><span id="stOpen">Open items: 10</span><span id="stTime">Elapsed: 0:00</span><span>100%</span></span></div>
+
+<div class="dialog hidden" id="dialog"><div class="dialog-box">
+  <div class="dh" id="dlgTitle">Microsoft Excel</div>
+  <div class="db" id="dlgBody"></div>
+  <div class="df"><button id="dlgCancel">Cancel</button><button class="primary" id="dlgOk">OK</button></div>
+</div></div>
+
+<script src="../config.js"></script>
+<script src="../shared/leaderboard.js"></script>
+<script>
+(() => {
+  'use strict';
+  // Minesweeper disguised as a spreadsheet.
+  // Hidden cells show decoy figures; revealed counts get conditional formatting; mines are #REF!, flags are #N/A.
+  const SHEETS = {
+    q1: { rows: 9, cols: 9, mines: 10, label: 'Q1' },
+    q2: { rows: 16, cols: 16, mines: 40, label: 'Q2' },
+    q3: { rows: 16, cols: 30, mines: 99, label: 'Q3' },
+  };
+  const BEST_KEY = 'workbook_best_v1';
+  const NAME_KEY = 'workbook_name_v1';
+  const $ = s => document.querySelector(s);
+  const grid = $('#grid');
+
+  let sheet = 'q1', cfg, cells, state, started, startTime, elapsedBefore, timerId, sel = { r: 0, c: 0 }, decoy = false;
+
+  const colName = c => { let s = ''; c++; while (c) { s = String.fromCharCode(65 + (c - 1) % 26) + s; c = Math.floor((c - 1) / 26); } return s; };
+  const fakeFigure = () => {
+    const v = Math.random() < 0.15 ? -Math.random() * 900 : Math.random() * 9800 + 50;
+    return v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  };
+  const neighbours = (r, c) => {
+    const out = [];
+    for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) {
+      const nr = r + dr, nc = c + dc;
+      if ((dr || dc) && nr >= 0 && nc >= 0 && nr < cfg.rows && nc < cfg.cols) out.push([nr, nc]);
+    }
+    return out;
+  };
+
+  function newGame() {
+    cfg = SHEETS[sheet];
+    cells = [];
+    for (let r = 0; r < cfg.rows; r++) {
+      cells.push([]);
+      for (let c = 0; c < cfg.cols; c++) cells[r].push({ mine: false, n: 0, open: false, flag: false, fake: fakeFigure() });
+    }
+    state = 'ready'; started = false; elapsedBefore = 0;
+    clearInterval(timerId);
+    sel = { r: 0, c: 0 };
+    buildTable();
+    renderAll();
+    updateStatus();
+    $('#stReady').textContent = 'Ready';
+  }
+
+  function placeMines(safeR, safeC) {
+    const safe = new Set([[safeR, safeC], ...neighbours(safeR, safeC)].map(([r, c]) => r * cfg.cols + c));
+    const pool = [];
+    for (let i = 0; i < cfg.rows * cfg.cols; i++) if (!safe.has(i)) pool.push(i);
+    for (let k = 0; k < cfg.mines; k++) {
+      const j = k + Math.floor(Math.random() * (pool.length - k));
+      [pool[k], pool[j]] = [pool[j], pool[k]];
+      const i = pool[k];
+      cells[Math.floor(i / cfg.cols)][i % cfg.cols].mine = true;
+    }
+    for (let r = 0; r < cfg.rows; r++) for (let c = 0; c < cfg.cols; c++) {
+      cells[r][c].n = neighbours(r, c).filter(([nr, nc]) => cells[nr][nc].mine).length;
+    }
+  }
+
+  function buildTable() {
+    let html = '<thead><tr><th></th>';
+    for (let c = 0; c < cfg.cols; c++) html += `<th data-col="${c}">${colName(c)}</th>`;
+    html += '</tr></thead><tbody>';
+    for (let r = 0; r < cfg.rows; r++) {
+      html += `<tr><th data-row="${r}">${r + 1}</th>`;
+      for (let c = 0; c < cfg.cols; c++) html += `<td data-r="${r}" data-c="${c}"></td>`;
+      html += '</tr>';
+    }
+    // Padding rows so it looks like a real sheet.
+    for (let r = cfg.rows; r < cfg.rows + 25; r++) {
+      html += `<tr><th>${r + 1}</th>` + '<td class="pad"></td>'.repeat(cfg.cols) + '</tr>';
+    }
+    grid.innerHTML = html + '</tbody>';
+  }
+
+  const tdAt = (r, c) => grid.querySelector(`td[data-r="${r}"][data-c="${c}"]`);
+
+  function renderCell(r, c) {
+    const cell = cells[r][c], td = tdAt(r, c);
+    td.className = '';
+    if (decoy) { td.classList.add('hid'); td.textContent = cell.fake; td.style.color = '#222'; return; }
+    td.style.color = '';
+    if (state === 'lost' && cell.mine && !cell.flag) {
+      td.className = 'mine' + (cell.boom ? ' boom' : ''); td.textContent = '#REF!';
+    } else if (state === 'lost' && cell.flag && !cell.mine) {
+      td.className = 'wrongflag'; td.textContent = '#N/A';
+    } else if (cell.flag) {
+      td.className = 'flag'; td.textContent = '#N/A';
+    } else if (!cell.open) {
+      td.className = 'hid'; td.textContent = cell.fake;
+    } else if (cell.n) {
+      td.className = `num n${cell.n}`; td.textContent = cell.n;
+    } else {
+      td.className = 'rev'; td.textContent = '';
+    }
+    if (r === sel.r && c === sel.c) td.classList.add('sel');
+  }
+  function renderAll() {
+    for (let r = 0; r < cfg.rows; r++) for (let c = 0; c < cfg.cols; c++) renderCell(r, c);
+    renderSelection();
+  }
+
+  function renderSelection() {
+    grid.querySelectorAll('.hl').forEach(e => e.classList.remove('hl'));
+    grid.querySelectorAll('td.sel').forEach(e => e.classList.remove('sel'));
+    const td = tdAt(sel.r, sel.c);
+    if (!td) return;
+    td.classList.add('sel');
+    grid.querySelector(`th[data-col="${sel.c}"]`).classList.add('hl');
+    grid.querySelector(`th[data-row="${sel.r}"]`).classList.add('hl');
+    $('#nameBox').textContent = colName(sel.c) + (sel.r + 1);
+    const cell = cells[sel.r][sel.c];
+    const ref = colName(Math.max(0, sel.c - 1)) + Math.max(1, sel.r) + ':' + colName(Math.min(cfg.cols - 1, sel.c + 1)) + Math.min(cfg.rows, sel.r + 2);
+    let f;
+    if (decoy || (!cell.open && !cell.flag)) f = cell.fake.replace(/,/g, '');
+    else if (cell.flag) f = '=NA()';
+    else if (cell.mine) f = '=#REF!';
+    else f = `=COUNTIF(${ref},"#REF!")`;
+    $('#formula').textContent = f;
+  }
+
+  function startTimer() {
+    started = true; startTime = Date.now();
+    timerId = setInterval(updateStatus, 500);
+  }
+  const elapsed = () => elapsedBefore + (started && state === 'playing' && !decoy ? (Date.now() - startTime) / 1000 : 0);
+
+  function updateStatus() {
+    const flags = cells.flat().filter(c => c.flag).length;
+    $('#stOpen').textContent = `Open items: ${cfg.mines - flags}`;
+    const s = Math.floor(elapsed());
+    $('#stTime').textContent = `Elapsed: ${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+  }
+
+  function reveal(r, c) {
+    if (state === 'won' || state === 'lost' || decoy) return;
+    const cell = cells[r][c];
+    if (cell.flag) return;
+    if (state === 'ready') { placeMines(r, c); state = 'playing'; startTimer(); }
+    if (cell.open) { chord(r, c); return; }
+    if (cell.mine) { cell.boom = true; lose(); return; }
+    flood(r, c);
+    checkWin();
+    renderAll();
+  }
+  function flood(r, c) {
+    const stack = [[r, c]];
+    while (stack.length) {
+      const [cr, cc] = stack.pop();
+      const cell = cells[cr][cc];
+      if (cell.open || cell.flag) continue;
+      cell.open = true;
+      if (cell.n === 0) for (const nb of neighbours(cr, cc)) if (!cells[nb[0]][nb[1]].open) stack.push(nb);
+    }
+  }
+  function chord(r, c) {
+    const cell = cells[r][c];
+    const nbs = neighbours(r, c);
+    if (!cell.n || nbs.filter(([a, b]) => cells[a][b].flag).length !== cell.n) return;
+    for (const [a, b] of nbs) {
+      const nb = cells[a][b];
+      if (nb.flag || nb.open) continue;
+      if (nb.mine) { nb.boom = true; lose(); return; }
+      flood(a, b);
+    }
+    checkWin();
+    renderAll();
+  }
+  function toggleFlag(r, c) {
+    if (state === 'won' || state === 'lost' || decoy) return;
+    const cell = cells[r][c];
+    if (cell.open) return;
+    cell.flag = !cell.flag;
+    renderCell(r, c); renderSelection(); updateStatus();
+  }
+
+  function lose() {
+    elapsedBefore = elapsed();
+    state = 'lost'; clearInterval(timerId);
+    renderAll(); updateStatus();
+    $('#stReady').textContent = 'Circular reference warning';
+    dialog('Microsoft Excel', 'There are one or more invalid references in this workbook (#REF!).<br><br>Click <b>OK</b> to rebuild the forecast.', newGame, false);
+  }
+  function checkWin() {
+    const left = cells.flat().filter(c => !c.open && !c.mine).length;
+    if (left) return;
+    elapsedBefore = elapsed();
+    state = 'won'; clearInterval(timerId);
+    cells.flat().forEach(c => { if (c.mine) c.flag = true; });
+    updateStatus();
+    const secs = Math.round(elapsedBefore * 10) / 10;
+    const best = JSON.parse(localStorage.getItem(BEST_KEY) || '{}');
+    const isBest = !best[sheet] || secs < best[sheet];
+    if (isBest) { best[sheet] = secs; localStorage.setItem(BEST_KEY, JSON.stringify(best)); }
+    $('#stReady').textContent = 'Reconciled';
+    const name = localStorage.getItem(NAME_KEY) || '';
+    dialog('Reconciliation complete',
+      `${cfg.label} forecast reconciled in <b>${secs}s</b>${isBest ? ' — new personal best!' : ` (best ${best[sheet]}s)`}.<br><br>Submit for approval as:<input id="dlgName" maxlength="20" value="${name.replace(/"/g, '&quot;')}" placeholder="Your name">`,
+      async () => {
+        const n = ($('#dlgName')?.value || '').trim();
+        if (!n) return;
+        localStorage.setItem(NAME_KEY, n);
+        await window.Leaderboard.submit('workbook-' + sheet, n, secs, cfg.label, 'asc');
+      }, true);
+  }
+
+  // ---------- Dialog ----------
+  let dlgOk = null;
+  function dialog(title, body, onOk, cancel) {
+    $('#dlgTitle').textContent = title;
+    $('#dlgBody').innerHTML = body;
+    $('#dlgCancel').classList.toggle('hidden', !cancel);
+    dlgOk = onOk;
+    $('#dialog').classList.remove('hidden');
+    setTimeout(() => ($('#dlgName') || $('#dlgOk')).focus(), 0);
+  }
+  $('#dlgOk').addEventListener('click', () => { const cb = dlgOk; closeDialog(); if (cb) cb(); });
+  $('#dlgCancel').addEventListener('click', closeDialog);
+  function closeDialog() { $('#dialog').classList.add('hidden'); dlgOk = null; }
+
+  // ---------- Other sheets ----------
+  async function showRankings() {
+    clearInterval(timerId);
+    let html = '<thead><tr><th></th><th>A</th><th>B</th><th>C</th><th>D</th><th>E</th><th>F</th></tr></thead><tbody>';
+    const row = (i, cells) => `<tr><th>${i}</th>${cells.map(c => `<td class="${typeof c === 'number' ? 'r' : ''}">${c}</td>`).join('')}</tr>`;
+    let i = 1;
+    html += row(i++, ['<b>Approval queue</b>', '', '', '', '', '']);
+    const best = JSON.parse(localStorage.getItem(BEST_KEY) || '{}');
+    html += row(i++, ['Your best (s)', 'Q1', best.q1 ?? '—', 'Q2', best.q2 ?? '—', 'Q3: ' + (best.q3 ?? '—')]);
+    html += row(i++, ['', '', '', '', '', '']);
+    for (const key of ['q1', 'q2', 'q3']) {
+      const { source, rows } = await window.Leaderboard.top('workbook-' + key, 'asc', 10);
+      html += row(i++, [`<b>${SHEETS[key].label} approvals</b>`, source === 'server' ? 'shared' : 'local only', '', '', '', '']);
+      html += row(i++, ['Rank', 'Approver', 'Seconds', 'Date', '', '']);
+      if (!rows.length) html += row(i++, ['—', '', '', '', '', '']);
+      rows.forEach((r, k) => { html += row(i++, [k + 1, esc(r.name), r.score, new Date(r.ts).toLocaleDateString(), '', '']); });
+      html += row(i++, ['', '', '', '', '', '']);
+    }
+    for (let k = 0; k < 15; k++) html += row(i++, ['', '', '', '', '', '']);
+    grid.innerHTML = html + '</tbody>';
+    grid.className = 'grid lb';
+  }
+  function showHelp() {
+    clearInterval(timerId);
+    const lines = [
+      ['<b>Reconciliation notes</b>'],
+      ['Each forecast sheet hides invalid references (<b>#REF!</b>). Find every valid cell without opening a #REF!.'],
+      ['Click a cell to open it. Opened cells show how many #REF! cells touch them (conditional formatting).'],
+      ['Right-click (or F) to mark a suspected #REF! as <b>#N/A</b>. Click an opened number to open its neighbours once enough are marked.'],
+      ['Arrow keys move the selection. Enter/Space opens. F2 or "Refresh All" restarts. Esc hides the game behind plain figures.'],
+      ['Q1 = 9×9 / 10, Q2 = 16×16 / 40, Q3 = 30×16 / 99. Fastest times go to the Approvals sheet.'],
+    ];
+    let html = '<thead><tr><th></th><th style="width:900px">A</th></tr></thead><tbody>';
+    lines.forEach((l, i) => { html += `<tr><th>${i + 1}</th><td>${l[0]}</td></tr>`; });
+    for (let i = lines.length; i < 30; i++) html += `<tr><th>${i + 1}</th><td></td></tr>`;
+    grid.innerHTML = html + '</tbody>';
+    grid.className = 'grid help';
+  }
+  const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+  function switchSheet(name) {
+    document.querySelectorAll('.tab').forEach(t => t.classList.toggle('on', t.dataset.sheet === name));
+    grid.className = 'grid';
+    if (name === 'rank') return showRankings();
+    if (name === 'help') return showHelp();
+    sheet = name;
+    newGame();
+  }
+
+  function toggleDecoy() {
+    if (!SHEETS[sheet] || !grid.querySelector('td[data-r]')) return;
+    if (state === 'playing') {
+      if (!decoy) { elapsedBefore = elapsed(); decoy = true; } else { decoy = false; startTime = Date.now(); }
+    } else decoy = !decoy;
+    $('#stReady').textContent = decoy ? 'Ready' : $('#stReady').textContent;
+    renderAll(); updateStatus();
+  }
+
+  // ---------- Input ----------
+  grid.addEventListener('mousedown', e => {
+    const td = e.target.closest('td[data-r]');
+    if (!td) return;
+    sel = { r: +td.dataset.r, c: +td.dataset.c };
+    if (e.button === 2) toggleFlag(sel.r, sel.c);
+    else if (e.button === 0) reveal(sel.r, sel.c);
+    renderSelection();
+  });
+  grid.addEventListener('contextmenu', e => { if (e.target.closest('td[data-r]')) e.preventDefault(); });
+  document.addEventListener('keydown', e => {
+    if (!$('#dialog').classList.contains('hidden')) {
+      if (e.key === 'Enter') $('#dlgOk').click();
+      if (e.key === 'Escape') closeDialog();
+      return;
+    }
+    if (e.key === 'Escape' || e.key === '`') { e.preventDefault(); toggleDecoy(); return; }
+    if (e.key === 'F2') { e.preventDefault(); if (SHEETS[sheet]) newGame(); return; }
+    if (!grid.querySelector('td[data-r]')) return;
+    const moves = { ArrowUp: [-1, 0], ArrowDown: [1, 0], ArrowLeft: [0, -1], ArrowRight: [0, 1] };
+    if (moves[e.key]) {
+      e.preventDefault();
+      sel.r = Math.max(0, Math.min(cfg.rows - 1, sel.r + moves[e.key][0]));
+      sel.c = Math.max(0, Math.min(cfg.cols - 1, sel.c + moves[e.key][1]));
+      renderSelection();
+      tdAt(sel.r, sel.c).scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    } else if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); reveal(sel.r, sel.c); renderSelection(); }
+    else if (e.key === 'f' || e.key === 'F') toggleFlag(sel.r, sel.c);
+  });
+  document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => switchSheet(t.dataset.sheet)));
+  $('#newBtn').addEventListener('click', () => { if (SHEETS[sheet] && grid.querySelector('td[data-r]')) newGame(); else switchSheet(sheet); });
+  $('#helpBtn').addEventListener('click', () => switchSheet('help'));
+
+  newGame();
+})();
+</script>
+</body>
+</html>
