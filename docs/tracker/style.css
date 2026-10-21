@@ -163,4 +163,10 @@ body.stealth .floater { color: var(--muted); font-size: 11px; }
   .kpis, .decoy-kpis { grid-template-columns: repeat(2, 1fr); }
   .fields { grid-template-columns: 1fr 1fr; }
   .search, .brand .muted { display: none; }
+  .actions .btn.primary { flex: 1 1 100%; min-height: 48px; font-size: 16px; }
+  .actions .btn { flex: 1 1 auto; min-height: 40px; }
+  .ping { left: 12px; right: 12px; width: auto; }
+  .field input { font-size: 16px; }
 }
+.btn, .nav, .item, .ping { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+.decoy-back { display: inline-block; font-size: 13px; color: var(--blue); cursor: pointer; margin-bottom: 14px; }

@@ -2,13 +2,14 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#107c41">
 <title>FY26_Budget_Forecast_v3_FINAL(2).xlsx</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='4' fill='%23107c41'/%3E%3Cpath d='M9 9h4l3 5 3-5h4l-5 7 5 7h-4l-3-5-3 5H9l5-7z' fill='white'/%3E%3C/svg%3E">
 <style>
   :root { --green: #107c41; --grid: #e1e1e1; --head: #f3f3f3; --sel: #107c41; --text: #222; font-family: "Segoe UI", Calibri, Arial, sans-serif; font-size: 13px; color: var(--text); }
   * { box-sizing: border-box; }
-  body { margin: 0; background: #fff; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+  body { margin: 0; background: #fff; display: flex; flex-direction: column; height: 100vh; height: 100dvh; overflow: hidden; }
   .titlebar { background: var(--green); color: #fff; height: 34px; display: flex; align-items: center; padding: 0 12px; gap: 14px; font-size: 12px; }
   .titlebar .file { flex: 1; text-align: center; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
   .menus { display: flex; gap: 2px; padding: 0 8px; background: #f8f8f8; border-bottom: 1px solid #ddd; font-size: 12px; overflow-x: auto; }
@@ -25,7 +26,9 @@
   .fx { color: #777; padding: 0 10px; font-style: italic; border-right: 1px solid #ddd; height: 100%; display: flex; align-items: center; }
   .formula { padding: 0 10px; font-family: Consolas, monospace; font-size: 12px; white-space: nowrap; overflow: hidden; }
   .sheetwrap { flex: 1; overflow: auto; position: relative; }
-  table.grid { border-collapse: collapse; table-layout: fixed; user-select: none; }
+  table.grid { border-collapse: collapse; table-layout: fixed; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+  .grid td, .group button, .tab { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+  .group button.on { background: #d2e8d9; border-color: var(--green); color: var(--green); }
   .grid th { background: var(--head); color: #555; font-weight: normal; font-size: 11px; border: 1px solid #d4d4d4; position: sticky; z-index: 1; }
   .grid thead th { top: 0; height: 20px; }
   .grid tbody th { left: 0; width: 40px; }
@@ -63,6 +66,22 @@
   .help td, .lb td { color: var(--text); text-align: left; }
   .lb td.r { text-align: right; }
   .help b { color: var(--green); }
+  .help td { white-space: normal; height: auto; padding: 4px; }
+  @media (max-width: 700px) {
+    .titlebar > span:not(.file) { display: none; }
+    .titlebar { padding-top: env(safe-area-inset-top); height: calc(34px + env(safe-area-inset-top)); }
+    .titlebar .file { text-align: left; }
+    .grid td { width: 39px; min-width: 39px; height: 34px; padding: 0 2px; font-size: 10.5px; }
+    .grid tbody th, .grid thead th:first-child { width: 30px; min-width: 30px; }
+    .grid thead th { height: 22px; }
+    .help td { width: auto; }
+    .namebox { width: 56px; }
+    #stMode { display: none; }
+    .status { gap: 12px; padding-bottom: env(safe-area-inset-bottom); height: calc(22px + env(safe-area-inset-bottom)); }
+    .status .r { gap: 12px; }
+    .dialog-box input { font-size: 16px; }
+    .ribbon .group:last-child { order: -1; }
+  }
 </style>
 </head>
 <body>
@@ -73,7 +92,7 @@
   <div class="group"><div class="btns"><button><b>B</b></button><button><i>I</i></button><button><u>U</u></button><button>Calibri ▾</button><button>11 ▾</button></div><span class="lbl">Font</span></div>
   <div class="group"><div class="btns"><button>≡</button><button>⇔ Merge</button><button>↵ Wrap</button></div><span class="lbl">Alignment</span></div>
   <div class="group"><div class="btns"><button>$</button><button>%</button><button>,</button><button>.0→.00</button></div><span class="lbl">Number</span></div>
-  <div class="group"><div class="btns"><button id="newBtn" title="Start a new reconciliation (F2)">↻ Refresh All</button><button id="helpBtn">ⓘ Notes</button></div><span class="lbl">Data</span></div>
+  <div class="group"><div class="btns"><button id="newBtn" title="Start a new reconciliation (F2)">↻ Refresh All</button><button id="markBtn" title="When on, clicks and taps mark cells #N/A instead of opening them">⚑ Mark #N/A</button><button id="helpBtn">ⓘ Notes</button></div><span class="lbl">Data</span></div>
 </div>
 <div class="fbar"><div class="namebox" id="nameBox">A1</div><div class="fx">fx</div><div class="formula" id="formula"></div></div>
 <div class="sheetwrap" id="wrap"><table class="grid" id="grid"></table></div>
@@ -114,9 +133,12 @@
   let sheet = 'q1', cfg, cells, state, started, startTime, elapsedBefore, timerId, sel = { r: 0, c: 0 }, decoy = false;
 
   const colName = c => { let s = ''; c++; while (c) { s = String.fromCharCode(65 + (c - 1) % 26) + s; c = Math.floor((c - 1) / 26); } return s; };
+  const narrow = window.matchMedia('(max-width: 700px)');
   const fakeFigure = () => {
     const v = Math.random() < 0.15 ? -Math.random() * 900 : Math.random() * 9800 + 50;
-    return v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    // Phone-width cells only fit whole numbers.
+    const dp = narrow.matches ? 0 : 2;
+    return v.toLocaleString('en-US', { minimumFractionDigits: dp, maximumFractionDigits: dp });
   };
   const neighbours = (r, c) => {
     const out = [];
@@ -348,7 +370,8 @@
       ['Each forecast sheet hides invalid references (<b>#REF!</b>). Find every valid cell without opening a #REF!.'],
       ['Click a cell to open it. Opened cells show how many #REF! cells touch them (conditional formatting).'],
       ['Right-click (or F) to mark a suspected #REF! as <b>#N/A</b>. Click an opened number to open its neighbours once enough are marked.'],
-      ['Arrow keys move the selection. Enter/Space opens. F2 or "Refresh All" restarts. Esc hides the game behind plain figures.'],
+      ['On a phone: tap to open, long-press to mark #N/A, or switch on <b>⚑ Mark #N/A</b> in the ribbon so taps mark instead.'],
+      ['Arrow keys move the selection. Enter/Space opens. F2 or "Refresh All" restarts. Esc (or tapping the file name at the top) hides the game behind plain figures.'],
       ['Q1 = 9×9 / 10, Q2 = 16×16 / 40, Q3 = 30×16 / 99. Fastest times go to the Approvals sheet.'],
     ];
     let html = '<thead><tr><th></th><th style="width:900px">A</th></tr></thead><tbody>';
@@ -378,14 +401,40 @@
   }
 
   // ---------- Input ----------
-  grid.addEventListener('mousedown', e => {
+  // Mouse: left opens, right marks. Touch: tap opens, long-press marks; dragging scrolls the sheet instead.
+  let markMode = false, press = null;
+  const primary = (r, c) => (markMode ? toggleFlag(r, c) : reveal(r, c));
+  grid.addEventListener('pointerdown', e => {
     const td = e.target.closest('td[data-r]');
     if (!td) return;
-    sel = { r: +td.dataset.r, c: +td.dataset.c };
-    if (e.button === 2) toggleFlag(sel.r, sel.c);
-    else if (e.button === 0) reveal(sel.r, sel.c);
+    const r = +td.dataset.r, c = +td.dataset.c;
+    sel = { r, c };
+    if (e.pointerType === 'mouse') {
+      if (e.button === 2) toggleFlag(r, c);
+      else if (e.button === 0) primary(r, c);
+      renderSelection();
+      return;
+    }
     renderSelection();
+    const p = { r, c, x: e.clientX, y: e.clientY, done: false };
+    p.timer = setTimeout(() => {
+      p.done = true;
+      toggleFlag(r, c);
+      if (navigator.vibrate) navigator.vibrate(15);
+    }, 420);
+    press = p;
   });
+  grid.addEventListener('pointermove', e => {
+    if (press && Math.hypot(e.clientX - press.x, e.clientY - press.y) > 10) { clearTimeout(press.timer); press = null; }
+  });
+  grid.addEventListener('pointerup', () => {
+    if (!press) return;
+    clearTimeout(press.timer);
+    if (!press.done) primary(press.r, press.c);
+    renderSelection();
+    press = null;
+  });
+  grid.addEventListener('pointercancel', () => { if (press) { clearTimeout(press.timer); press = null; } });
   grid.addEventListener('contextmenu', e => { if (e.target.closest('td[data-r]')) e.preventDefault(); });
   document.addEventListener('keydown', e => {
     if (!$('#dialog').classList.contains('hidden')) {
@@ -409,6 +458,12 @@
   document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => switchSheet(t.dataset.sheet)));
   $('#newBtn').addEventListener('click', () => { if (SHEETS[sheet] && grid.querySelector('td[data-r]')) newGame(); else switchSheet(sheet); });
   $('#helpBtn').addEventListener('click', () => switchSheet('help'));
+  $('#fileName').addEventListener('click', toggleDecoy);
+  $('#markBtn').addEventListener('click', () => {
+    markMode = !markMode;
+    $('#markBtn').classList.toggle('on', markMode);
+    $('#stReady').textContent = markMode ? 'Mark mode' : 'Ready';
+  });
 
   newGame();
 })();

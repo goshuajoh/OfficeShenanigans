@@ -599,6 +599,7 @@
     $('#ping').addEventListener('click', answerPing);
     $('#decoyBtn').addEventListener('click', toggleDecoy);
     $('#decoy').addEventListener('dblclick', toggleDecoy);
+    $('#decoyBack').addEventListener('click', toggleDecoy);
     $('#modalOk').addEventListener('click', () => {
       $('#modal').classList.add('hidden');
       const cb = modalCb; modalCb = null;

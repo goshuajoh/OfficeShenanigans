@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Zero-dependency server: serves ../web and a shared leaderboard API.
+// Zero-dependency server: serves ../docs (the static site) and a shared leaderboard API.
 //
 //   GET  /api/scores?game=tracker&order=desc&limit=20
 //   POST /api/scores  {game, name, score, meta?, order?}
@@ -12,7 +12,7 @@ const fs = require('fs');
 const path = require('path');
 
 const PORT = Number(process.env.PORT) || 8080;
-const WEB_ROOT = path.resolve(__dirname, '..', 'web');
+const WEB_ROOT = path.resolve(__dirname, '..', 'docs');
 const DATA_FILE = process.env.DATA_FILE || path.join(__dirname, 'data', 'scores.json');
 const MAX_PER_GAME = 200;
 
@@ -24,6 +24,7 @@ const MIME = {
   '.svg': 'image/svg+xml',
   '.png': 'image/png',
   '.ico': 'image/x-icon',
+  '.webmanifest': 'application/manifest+json',
 };
 
 let scores = {};

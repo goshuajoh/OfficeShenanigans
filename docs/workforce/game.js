@@ -66,7 +66,7 @@
       },
       pity: 0, pityL: 0, lastPull: [],
       allHandsUntil: 0, allHandsReady: 0, pizzaUntil: 0, pizzaReady: 0,
-      settings: { stealth: false, badge: true, autoLevel: true, autoEquip: true, autoRepeat: true },
+      settings: { stealth: false, badge: true, autoLevel: true, autoEquip: true, autoRepeat: true, installHint: true },
     };
   }
 
@@ -802,7 +802,7 @@
     el.textContent = msg;
     box.appendChild(el);
     toastQueue.push(el);
-    while (toastQueue.length > 3) toastQueue.shift().remove();
+    while (toastQueue.length > (compact() ? 2 : 3)) toastQueue.shift().remove();
     setTimeout(() => { el.remove(); const i = toastQueue.indexOf(el); if (i >= 0) toastQueue.splice(i, 1); }, 2500 + msg.length * 40);
   }
 
@@ -864,6 +864,28 @@
     ['OPERATIONS', [['engage', 'Client engagements', 'engage'], ['rnd', 'R&D', 'rnd'], ['okr', 'OKRs & badges']]],
     ['COMPANY', [['board', 'Board & IPO', 'board'], ['rank', 'Rankings'], ['settings', 'Settings']]],
   ];
+  const VIEW_LABEL = Object.fromEntries(NAV.flatMap(([, items]) => items.map(([v, label]) => [v, label])));
+  // Phones get a bottom tab bar; everything else lives behind "More".
+  const TABS = [['overview', 'Home'], ['team', 'Team'], ['recruit', 'Hire', 'recruit'], ['engage', 'Clients', 'engage']];
+  const MORE = [['assets', 'assets'], ['rnd', 'rnd'], ['okr'], ['board', 'board'], ['rank'], ['settings']];
+  const ICON = {
+    overview: '<path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>',
+    team: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.6 3.4-5.5 6.5-5.5s5.7 1.9 6.5 5.5"/><circle cx="17" cy="9" r="2.5"/><path d="M16.5 14.6c2.6.3 4.4 2 5 4.9"/>',
+    recruit: '<circle cx="10" cy="8" r="3.5"/><path d="M3.5 20c.8-3.6 3.4-5.5 6.5-5.5s5.7 1.9 6.5 5.5"/><path d="M19 7.5v6M16 10.5h6"/>',
+    engage: '<rect x="3" y="7" width="18" height="13" rx="2"/><path d="M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M3 13h18"/>',
+    more: '<circle cx="5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="19" cy="12" r="1.3"/>',
+    assets: '<rect x="4" y="5" width="16" height="11" rx="1.5"/><path d="M2 19h20"/>',
+    rnd: '<path d="M9 3h6M10 3v6l-5.5 9.5A1.5 1.5 0 0 0 5.8 21h12.4a1.5 1.5 0 0 0 1.3-2.5L14 9V3M7.2 15.5h9.6"/>',
+    okr: '<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1"/>',
+    board: '<path d="M4 20h16M7 17v-6M12 17V7M17 17v-9"/>',
+    rank: '<path d="M8 4h8v5a4 4 0 0 1-8 0zM8 6H5a3 3 0 0 0 3 4M16 6h3a3 3 0 0 1-3 4M12 13v4M8 20h8"/>',
+    settings: '<circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/>',
+    report: '<path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5M9 13h7M9 17h7"/>',
+    install: '<rect x="7" y="2.5" width="10" height="19" rx="2"/><path d="M12 7v7M9 11l3 3 3-3"/>',
+  };
+  const icon = k => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON[k]}</svg>`;
+  const phoneQuery = window.matchMedia('(max-width: 700px)');
+  const compact = () => phoneQuery.matches;
   let view = 'overview';
 
   function navBadge(v) {
@@ -880,15 +902,137 @@
       const b = navBadge(v);
       return `<button class="nav ${v === view ? 'active' : ''}" data-act="nav" data-view="${v}">${label}${isNew ? '<span class="new">New</span>' : b ? `<span class="count badge">${b > 99 ? '99+' : b}</span>` : ''}</button>`;
     }).join('')).join('');
+
+    const inMore = !TABS.some(([v]) => v === view);
+    $('#tabbar').innerHTML = TABS.map(([v, label, gate]) => {
+      const locked = gate && !isUnlocked(gate);
+      // Referrals are always nonzero mid-game, so only flag them once a 10-pull is possible.
+      const b = locked ? 0 : v === 'recruit' ? (S.referrals >= 10 ? S.referrals : 0) : navBadge(v);
+      const isNew = gate && !locked && !S.seen[v];
+      return `<button class="tab-btn ${v === view ? 'active' : ''} ${locked ? 'locked' : ''}" data-act="${locked ? 'lockedTab' : 'nav'}" data-view="${v}">${icon(v)}<span>${label}</span>${b ? `<span class="count">${b > 99 ? '99+' : b}</span>` : isNew ? '<span class="pip"></span>' : ''}</button>`;
+    }).join('') + `<button class="tab-btn ${inMore ? 'active' : ''}" data-act="more">${icon('more')}<span>More</span>${moreAlert() ? '<span class="pip"></span>' : ''}</button>`;
+    $('#viewTitle').textContent = VIEW_LABEL[view];
+    if (!$('#sheet').classList.contains('hidden')) renderSheet();
   }
+
+  function moreAlert() {
+    return MORE.some(([v, gate]) => gate && isUnlocked(gate) && !S.seen[v])
+      || actionable().some(a => a.count && MORE.some(([v]) => v === a.view));
+  }
+
+  function renderSheet() {
+    const items = MORE.map(([v, gate]) => {
+      const locked = gate && !isUnlocked(gate);
+      const b = locked ? 0 : navBadge(v);
+      const right = locked ? `<span class="right">Unlocks at project ${D.UNLOCKS[gate]}</span>`
+        : gate && !S.seen[v] ? '<span class="right new">New</span>'
+          : b ? `<span class="right count">${b > 99 ? '99+' : b}</span>` : '';
+      return `<button class="sheet-item ${locked ? 'locked' : ''} ${v === view ? 'active' : ''}" ${locked ? '' : `data-act="nav" data-view="${v}"`}>${icon(v)}<span>${VIEW_LABEL[v]}</span>${right}</button>`;
+    }).join('');
+    $('#sheetBox').innerHTML = `<div class="sheet-handle"></div>${items}<div class="sheet-sep"></div>
+      ${isStandalone() ? '' : `<button class="sheet-item" data-act="install">${icon('install')}<span>Install on this device</span></button>`}
+      <button class="sheet-item" data-act="decoy">${icon('report')}<span>Report view</span><span class="right muted">hides the game</span></button>`;
+  }
+  function openSheet() { renderSheet(); $('#sheet').classList.remove('hidden'); }
+  function closeSheet() { $('#sheet').classList.add('hidden'); }
 
   function go(v) {
     view = v;
     S.seen[v] = true;
-    document.body.classList.remove('nav-open');
+    closeSheet();
+    if (v === 'settings') refreshPacked();
     renderNav();
     renderView(true);
     window.scrollTo(0, 0);
+  }
+
+  // ================================================================ install, app badge & moving between devices
+
+  let installEvent = null, lastBadge = -1, packed = '';
+  const isStandalone = () => window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+  const isIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const showInstallCard = () => compact() && !isStandalone() && S.settings.installHint !== false;
+
+  function promptInstall() {
+    if (installEvent) {
+      installEvent.prompt();
+      installEvent.userChoice
+        .then(c => { if (c.outcome === 'accepted') S.settings.installHint = false; })
+        .catch(() => {})
+        .then(() => { installEvent = null; renderView(true); });
+      return;
+    }
+    modal('Install Atlas Workforce', isIOS()
+      ? `<ol><li>Open this page in <b>Safari</b>.</li><li>Tap the <b>Share</b> button (the square with an arrow).</li><li>Choose <b>Add to Home Screen</b>, then <b>Add</b>.</li></ol>
+         <p class="muted small">It opens full-screen from your home screen and keeps working offline.
+         On iPhone the home-screen app keeps its own save, separate from Safari. To bring this progress along, use <b>Settings → Play on another device</b> and paste the link inside the app.</p>`
+      : `<ol><li>Open the browser menu (⋮).</li><li>Choose <b>Install app</b> or <b>Add to Home screen</b>.</li></ol>
+         <p class="muted small">It opens full-screen from your home screen, keeps working offline, and shares this browser's save.</p>`);
+  }
+
+  function setAppBadge(n) {
+    if (!('setAppBadge' in navigator) || n === lastBadge) return;
+    lastBadge = n;
+    (n ? navigator.setAppBadge(n) : navigator.clearAppBadge()).catch(() => {});
+  }
+
+  function toB64url(bytes) {
+    let bin = '';
+    for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+    return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  }
+  function fromB64url(str) {
+    const bin = atob(str.replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((str.length + 3) % 4));
+    return Uint8Array.from(bin, c => c.charCodeAt(0));
+  }
+  // A save fits comfortably in a link: ~3–8 KB of JSON, deflated to a third of that.
+  async function packSave() {
+    const data = Object.assign({}, S, { offers: [], lastPull: [], blocker: null, lastSeen: now() });
+    let bytes = new TextEncoder().encode(JSON.stringify(data)), tag = 'j';
+    if (window.CompressionStream) {
+      try {
+        bytes = new Uint8Array(await new Response(new Blob([bytes]).stream().pipeThrough(new CompressionStream('deflate-raw'))).arrayBuffer());
+        tag = 'z';
+      } catch { /* plain JSON still works, just longer */ }
+    }
+    return tag + toB64url(bytes);
+  }
+  async function unpackSave(code) {
+    const bytes = fromB64url(code.slice(1));
+    const json = code[0] === 'z'
+      ? await new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).text()
+      : new TextDecoder().decode(bytes);
+    const data = JSON.parse(json);
+    if (!data || typeof data !== 'object' || !data.staff || !Array.isArray(data.squad)) throw new Error('not a save');
+    return data;
+  }
+  // Clipboard and share sheets need the user's tap to still be "fresh", so keep a link ready ahead of time.
+  async function refreshPacked() {
+    try { packed = await packSave(); } catch { packed = ''; }
+  }
+  const transferUrl = code => `${location.origin}${location.pathname}#transfer=${code}`;
+
+  async function importCode(text) {
+    const t = String(text || '').trim();
+    const code = t.includes('#transfer=') ? t.split('#transfer=')[1].trim() : t;
+    if (!/^[jz][A-Za-z0-9_-]{20,}$/.test(code)) throw new Error('not a transfer code');
+    const data = await unpackSave(code);
+    modal('Continue on this device?',
+      `<p>This link carries progress from another device: <b>project ${esc(data.maxStage)}</b>, ${Object.keys(data.staff).length} people, ${esc(data.ipos || 0)} IPO${data.ipos === 1 ? '' : 's'}.</p>
+       <p>This device is at project ${S.maxStage} with ${owned().length} people. <b>Importing replaces it.</b></p>`,
+      () => {
+        S = hydrate(data);
+        compute();
+        spawn();
+        checkUnlocks(true);
+        if (isUnlocked('engage')) ensureOffers();
+        ensureOkrs();
+        applySettings();
+        $('#meAvatar').textContent = initials(S.name || '?');
+        save();
+        toast('Progress imported. Your squad is back at work.');
+        go('overview');
+      }, true);
   }
 
   // ================================================================ UI: views
@@ -897,6 +1041,9 @@
 
   VIEWS.overview = () => `
     <div class="page-head"><div><div class="muted small">${greeting()}</div><h1>Overview</h1></div></div>
+    ${showInstallCard() ? `<div class="card install-card"><div class="grow"><b>Install Workforce on this phone</b>
+      <span class="muted small">Opens full-screen from your home screen and works offline.</span></div>
+      <button class="btn primary" data-act="install">Install</button><button class="btn" data-act="dismissInstall">Not now</button></div>` : ''}
     <div class="grid2">
       <div class="card project" id="pjCard">
         <div class="muted small" id="pjClient"></div>
@@ -976,7 +1123,14 @@
     if (!$('#squadMini')) return;
     $('#sqCount').textContent = `${S.squad.length}/${squadSlots()}`;
     const total = S.squad.reduce((a, id) => a + memberOutput(id), 0) || 1;
-    $('#squadMini').innerHTML = `<table class="table"><thead><tr><th>Employee</th><th class="num">Lvl</th><th class="num">Output/s</th><th></th></tr></thead><tbody>` +
+    if (compact()) {
+      $('#squadMini').innerHTML = S.squad.map(id => {
+        const out = memberOutput(id), c = levelCost(id);
+        return `<div class="mini-row">${avatar(id)}<div class="grow"><div class="nm">${esc(PEOPLE[id].name)}</div>
+          <div class="muted small">Lvl ${S.staff[id].lvl} · ${fmt(out)}/s</div><div class="bar thin"><div class="fill" style="width:${100 * out / total}%"></div></div></div>
+          <button class="btn sm" data-act="level" data-id="${id}" data-n="1" ${c > S.cash ? 'disabled' : ''}>+1<span class="sub">${money(c)}</span></button></div>`;
+      }).join('');
+    } else $('#squadMini').innerHTML = `<table class="table"><thead><tr><th>Employee</th><th class="num">Lvl</th><th class="num">Output/s</th><th></th></tr></thead><tbody>` +
       S.squad.map(id => {
         const out = memberOutput(id), c = levelCost(id);
         return `<tr><td><div class="person">${avatar(id)}<div><div class="nm">${esc(PEOPLE[id].name)}</div><div class="bio">${band(PEOPLE[id].r)} ${D.ROLES[PEOPLE[id].role].name}</div></div></div></td>
@@ -994,11 +1148,30 @@
     return `
     <div class="page-head"><div><div class="muted small">${ids.length} people · squad ${S.squad.length}/${squadSlots()}</div><h1>Team</h1></div>
       <div class="actions"><button class="btn" data-act="bestSquad">Best squad</button>${isUnlocked('assets') ? '<button class="btn" data-act="equipBest">Equip best assets</button>' : ''}<button class="btn primary" data-act="levelSquad">Level squad (best value)</button></div></div>
+    ${compact() ? `<div class="mcards">${ids.map(teamCard).join('')}</div>
+      <p class="muted small">Output doubles at level 10 and every 25 levels. Duplicate recruits promote people (+1★ = ×1.5 output and stronger passives).</p>` : `
     <div class="card"><div class="table-wrap"><table class="table">
       <thead><tr><th>Employee</th><th>Level band</th><th>Promotion</th><th class="num">Lvl</th><th class="num">Output/s</th><th>Passive (in squad)</th>${isUnlocked('assets') ? '<th>Assets</th>' : ''}<th>Status</th><th class="num">Level up</th><th></th></tr></thead>
       <tbody>${ids.map(teamRow).join('')}</tbody></table></div>
-      <p class="muted small">Output doubles at level 10 and every 25 levels. Duplicate recruits promote people (+1★ = ×1.5 output and stronger passives).</p></div>`;
+      <p class="muted small">Output doubles at level 10 and every 25 levels. Duplicate recruits promote people (+1★ = ×1.5 output and stronger passives).</p></div>`}`;
   };
+  function teamCard(id) {
+    const p = PEOPLE[id], st = S.staff[id];
+    const inSquad = S.squad.includes(id), away = onMission(id);
+    const c1 = levelCost(id), c10 = levelCost(id, 10), mx = maxLevels(id);
+    return `<div class="mcard ${inSquad ? '' : 'dim'}">
+      <div class="mcard-top">${avatar(id)}<div class="grow"><div class="nm">${esc(p.name)}</div>
+        <div class="mcard-sub">${band(p.r)} ${D.ROLES[p.role].name} ${starsHtml(st.stars)}</div></div>
+        <span class="status ${away ? 'away' : inSquad ? 'squad' : 'bench'}">${away ? 'Away' : inSquad ? 'Squad' : 'Bench'}</span></div>
+      <div class="mcard-stats"><span>Lvl <b>${st.lvl}</b></span><span><b>${fmt(memberOutput(id))}</b>/s</span>
+        ${isUnlocked('assets') ? `<span>Assets <b>+${gearPct(id)}%</b></span>` : ''}<span>${D.ROLES[p.role].passiveText(Math.round(passiveOf(id)))}</span></div>
+      <div class="mcard-actions">
+        <button class="btn sm" data-act="level" data-id="${id}" data-n="1" ${c1 > S.cash ? 'disabled' : ''}>+1<span class="sub">${money(c1)}</span></button>
+        <button class="btn sm" data-act="level" data-id="${id}" data-n="10" ${c10 > S.cash ? 'disabled' : ''}>+10<span class="sub">${money(c10)}</span></button>
+        <button class="btn sm" data-act="level" data-id="${id}" data-n="max" ${mx < 1 ? 'disabled' : ''}>Max<span class="sub">+${mx}</span></button>
+        <button class="btn sm" data-act="squad" data-id="${id}" ${away ? 'disabled' : ''}>${inSquad ? 'Bench' : 'Squad'}<span class="sub">${inSquad ? 'remove' : 'add'}</span></button>
+      </div></div>`;
+  }
   function teamRow(id) {
     const p = PEOPLE[id], st = S.staff[id];
     const inSquad = S.squad.includes(id), away = onMission(id);
@@ -1058,10 +1231,19 @@
     <div class="page-head"><div><div class="muted small">${S.items.length}/${MAX_ITEMS} assets · drop chance ${(C.drop * 100).toFixed(1)}% per blocker, guaranteed from launches</div><h1>IT assets</h1></div>
       <div class="actions">${RES('autoequip') ? `<span class="toggle ${S.settings.autoEquip ? 'on' : ''}" data-act="setting" data-key="autoEquip"><span class="sw"></span>Auto-equip</span>` : ''}
       <button class="btn" data-act="recycleAll">Recycle unassigned</button><button class="btn primary" data-act="equipBest">Equip best</button></div></div>
+    ${compact() ? `<div class="card-title" style="margin:4px 0 -4px">Squad equipment</div><div class="mcards">${S.squad.map(id => `<div class="mcard">
+      <div class="mcard-top">${avatar(id)}<div class="grow"><div class="nm">${esc(PEOPLE[id].name)}</div><div class="mcard-sub">+${gearPct(id)}% from assets</div></div></div>
+      <div class="mcard-slots">${Object.keys(D.GEAR).map(slot => {
+        const it = S.items.find(i => i.owner === id && i.slot === slot);
+        return it ? `<div class="r${it.r}" title="${esc(itemName(it))}">${esc(itemName(it))} <b>+${it.pct}%</b></div>` : `<div class="muted">No ${D.GEAR[slot].name.toLowerCase()}</div>`;
+      }).join('')}</div></div>`).join('')}</div>` : `
     <div class="card"><div class="card-title">Squad equipment</div><div class="table-wrap"><table class="table">
-      <thead><tr><th>Employee</th>${Object.values(D.GEAR).map(g => `<th>${g.name}</th>`).join('')}<th class="num">Bonus</th></tr></thead><tbody>${rows}</tbody></table></div></div>
+      <thead><tr><th>Employee</th>${Object.values(D.GEAR).map(g => `<th>${g.name}</th>`).join('')}<th class="num">Bonus</th></tr></thead><tbody>${rows}</tbody></table></div></div>`}
     <div class="card"><div class="card-title">Unassigned <span class="muted small">${spare.length}</span></div>
-      ${spare.length ? `<div class="table-wrap"><table class="table"><thead><tr><th>Asset</th><th>Type</th><th>Grade</th><th class="num">Bonus</th><th class="num">Found on</th><th></th></tr></thead><tbody>${spare.map(i => `
+      ${spare.length && compact() ? `<div class="list">${spare.map(i => `<div class="li"><div class="grow"><b class="r${i.r}">${esc(itemName(i))}</b>
+        <div class="meta">${D.GEAR[i.slot].name} · ${D.RARITY[i.r].name} grade · +${i.pct}% · found on P${i.lvl}</div></div>
+        <button class="btn sm" data-act="recycle" data-item="${i.id}">Recycle<span class="sub">${money(itemValue(i) * C.cashBase)}</span></button></div>`).join('')}</div>`
+      : spare.length ? `<div class="table-wrap"><table class="table"><thead><tr><th>Asset</th><th>Type</th><th>Grade</th><th class="num">Bonus</th><th class="num">Found on</th><th></th></tr></thead><tbody>${spare.map(i => `
         <tr><td class="r${i.r}">${esc(itemName(i))}</td><td>${D.GEAR[i.slot].name}</td><td>${band(i.r)}</td><td class="num">+${i.pct}%</td><td class="num">P${i.lvl}</td>
         <td class="num"><button class="btn sm" data-act="recycle" data-item="${i.id}">Recycle · ${money(itemValue(i) * C.cashBase)}</button></td></tr>`).join('')}</tbody></table></div>`
         : '<p class="muted">Nothing unassigned. Assets drop while your squad works.</p>'}
@@ -1150,18 +1332,31 @@
   VIEWS.rank = () => `
     <div class="page-head"><div><div class="muted small" id="lbSource"></div><h1>Rankings</h1></div>
       <div class="actions"><button class="btn" data-act="lbRefresh">Refresh</button><button class="btn primary" data-act="lbSubmit">Submit my numbers</button></div></div>
-    <div class="card"><div class="table-wrap"><table class="table"><thead><tr><th>#</th><th>Name</th><th class="num">Highest project</th><th>Details</th></tr></thead><tbody id="lbBody"><tr><td colspan="4" class="muted">Loading…</td></tr></tbody></table></div></div>`;
+    <div class="card"><div class="table-wrap"><table class="table rank"><thead><tr><th>#</th><th>Name</th><th class="num">Highest project</th><th>Details</th></tr></thead><tbody id="lbBody"><tr><td colspan="4" class="muted">Loading…</td></tr></tbody></table></div></div>`;
 
   VIEWS.settings = () => `
     <div class="page-head"><div><h1>Settings</h1></div></div>
     <div class="card">
-      <label class="field">Display name<input id="setName" maxlength="20" value="${esc(S.name)}" placeholder="Your name"></label>
+      <label class="field">Display name<input id="setName" maxlength="20" value="${esc(S.name)}" placeholder="Your name" autocomplete="off"></label>
       <div class="row"><span class="toggle ${S.settings.stealth ? 'on' : ''}" data-act="setting" data-key="stealth"><span class="sw"></span>Stealth mode (no colours, animations or floating numbers)</span></div>
-      <div class="row"><span class="toggle ${S.settings.badge ? 'on' : ''}" data-act="setting" data-key="badge"><span class="sw"></span>Show a task count in the browser tab, e.g. "(2) Atlas Workforce"</span></div>
+      <div class="row"><span class="toggle ${S.settings.badge ? 'on' : ''}" data-act="setting" data-key="badge"><span class="sw"></span>Show a task count in the tab title and on the app icon, e.g. "(2) Atlas Workforce"</span></div>
       ${RES('autolevel') ? `<div class="row"><span class="toggle ${S.settings.autoLevel ? 'on' : ''}" data-act="setting" data-key="autoLevel"><span class="sw"></span>Auto-level squad (Process automation)</span></div>` : ''}
+    </div>
+    <div class="card"><div class="card-title">Play on another device</div>
+      <p class="small" style="margin-top:0">Send yourself a link that carries this save, then open it on your phone or computer to carry on from here.
+        Whichever device opens the link takes over this progress.</p>
+      <div class="row"><button class="btn primary" data-act="transferCopy">Copy transfer link</button>
+        ${navigator.share ? '<button class="btn" data-act="transferShare">Share…</button>' : ''}
+        ${isStandalone() ? '' : '<button class="btn" data-act="install">Install as an app</button>'}</div>
+      <textarea id="transferBox" class="hidden" rows="3" readonly></textarea>
+      <label class="field" style="max-width:none">Got a link from your other device? Paste it here:
+        <textarea id="importBox" rows="2" placeholder="https://…#transfer=…" autocomplete="off"></textarea></label>
+      <div class="row" style="margin-top:0"><button class="btn" data-act="transferImport">Import progress</button></div>
+    </div>
+    <div class="card"><div class="card-title">Backup</div>
       <div class="row"><button class="btn" data-act="export">Export save</button><button class="btn" data-act="import">Import save</button><button class="btn danger" data-act="reset">Hard reset</button></div>
       <textarea id="saveBox" class="hidden" rows="4" placeholder="Paste a save here, then press Import again"></textarea>
-      <p class="muted small">Progress saves in this browser every few seconds. Keys: <b>Space</b> assist · <b>1</b> all-hands · <b>2</b> pizza · <b>Esc</b> or <b>\`</b> report view.</p>
+      <p class="muted small">Progress saves on this device every few seconds.${compact() ? ' Tap ⧉ at the top for the report view.' : ' Keys: <b>Space</b> assist · <b>1</b> all-hands · <b>2</b> pizza · <b>Esc</b> or <b>`</b> report view.'}</p>
     </div>`;
 
   let pointerDown = false;
@@ -1196,8 +1391,31 @@
 
   const ACTIONS = {
     nav: d => go(d.view),
-    toggleNav: () => document.body.classList.toggle('nav-open'),
-    decoy: () => toggleDecoy(),
+    more: () => ($('#sheet').classList.contains('hidden') ? openSheet() : closeSheet()),
+    lockedTab: d => toast(`${VIEW_LABEL[d.view]} unlocks at project ${D.UNLOCKS[TABS.find(t => t[0] === d.view)[2]]}`),
+    decoy: () => { closeSheet(); toggleDecoy(); },
+    install: () => { closeSheet(); promptInstall(); },
+    dismissInstall: () => { S.settings.installHint = false; renderView(true); },
+    transferCopy: () => {
+      if (!packed) { refreshPacked(); return toast('Preparing your link… tap again in a second'); }
+      const url = transferUrl(packed);
+      const showBox = () => {
+        const box = $('#transferBox');
+        box.classList.remove('hidden');
+        box.value = url;
+        box.focus();
+        box.select();
+        toast('Copy the link from the box below');
+      };
+      if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(url).then(() => toast('Transfer link copied. Open it on your other device.'), showBox);
+      } else showBox();
+    },
+    transferShare: () => {
+      if (!packed) { refreshPacked(); return toast('Preparing your link… tap again in a second'); }
+      navigator.share({ title: 'Atlas Workforce', text: 'Continue in Atlas Workforce', url: transferUrl(packed) }).catch(() => {});
+    },
+    transferImport: () => importCode($('#importBox').value).catch(() => toast('That doesn\'t look like a complete transfer link')),
     ping: () => answerPing(),
     assist: (d, ev) => assist(ev),
     allhands: () => allHands(),
@@ -1267,6 +1485,7 @@
     $('#bellCount').textContent = n;
     $('#bellCount').classList.toggle('hidden', !n);
     document.title = (S.settings.badge && n ? `(${n}) ` : '') + 'Atlas Workforce';
+    setAppBadge(S.settings.badge ? n : 0);
   }
 
   function bind() {
@@ -1284,8 +1503,20 @@
     $('#modalOk').addEventListener('click', () => closeModal(true));
     $('#modalCancel').addEventListener('click', () => closeModal(false));
     $('#modal').addEventListener('click', e => { if (e.target.id === 'modal') closeModal(false); });
+    $('#sheet').addEventListener('click', e => { if (e.target.id === 'sheet') closeSheet(); });
     $('#decoy').addEventListener('dblclick', toggleDecoy);
+    const onResize = () => renderView(true);
+    if (phoneQuery.addEventListener) phoneQuery.addEventListener('change', onResize);
+    else phoneQuery.addListener(onResize);
+    window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); installEvent = e; });
+    window.addEventListener('appinstalled', () => {
+      installEvent = null;
+      S.settings.installHint = false;
+      toast('Installed. Open Workforce from your home screen.');
+      renderView(true);
+    });
     document.addEventListener('keydown', e => {
+      if (e.key === 'Escape' && !$('#sheet').classList.contains('hidden')) { closeSheet(); return; }
       if (e.key === 'Escape' || e.key === '`') {
         if (!$('#modal').classList.contains('hidden') && e.key === 'Escape') { closeModal(false); return; }
         e.preventDefault(); toggleDecoy(); return;
@@ -1330,7 +1561,10 @@
       renderView(false);
       updateTitle();
     }
-    if (ticks % 50 === 0) save();
+    if (ticks % 50 === 0) {
+      save();
+      if (view === 'settings') refreshPacked();
+    }
   }
 
   // ================================================================ boot
@@ -1344,21 +1578,28 @@
     if (isUnlocked('engage')) ensureOffers();
     ensureOkrs();
     bind();
+    // A transfer link (#transfer=…) carries a save from another device; strip it so a reload doesn't re-import.
+    const transfer = location.hash.startsWith('#transfer=') ? location.hash : null;
+    if (transfer) history.replaceState(null, '', location.pathname + location.search);
     const away = (now() - S.lastSeen) / 1000;
-    if (away > 60) offlineGain(away, true);
-    else if (S.stats.blockers === 0) {
+    if (away > 60) offlineGain(away, !transfer);
+    else if (S.stats.blockers === 0 && !transfer) {
       modal('Welcome to Atlas Workforce',
         `<p>You manage a small squad. They clear blockers on client projects by themselves, earning revenue.</p>
-         <ul><li>Spend revenue on <b>level-ups</b> (Team, or the +1 buttons on the Overview).</li>
+         <ul><li>Spend revenue on <b>level-ups</b> (Team, or the +1 buttons on the ${compact() ? 'Home tab' : 'Overview'}).</li>
          <li>Every 5th project ends in a timed <b>launch</b>. If you miss it, the squad regroups and tries again when it's ready.</li>
          <li>More of the company unlocks as you go. Check back now and then.</li></ul>
-         <p class="muted small">Press <b>Esc</b> any time for a very boring report.</p>`);
+         <p class="muted small">${compact() ? 'Tap <b>⧉</b> at the top any time' : 'Press <b>Esc</b> any time'} for a very boring report.</p>`);
     }
     log('Signed in. Your squad is on it.');
     renderNav();
     renderView(true);
     updateTitle();
     setInterval(tick, 100);
+    if (transfer) importCode(transfer).catch(() => toast('That transfer link looks incomplete. Try copying it again.'));
+    if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
+      navigator.serviceWorker.register('sw.js').catch(() => { /* offline support is a bonus */ });
+    }
     if (/[?&]debug/.test(location.search)) {
       window.WF = {
         state: () => S,
