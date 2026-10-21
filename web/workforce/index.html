@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Atlas Workforce</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23005f73'/%3E%3Ccircle cx='16' cy='12' r='5' fill='white'/%3E%3Cpath d='M7 26c1-5 5-8 9-8s8 3 9 8z' fill='white'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="topbar">
+  <button class="icon-btn menu-btn" data-act="toggleNav" aria-label="Menu">☰</button>
+  <div class="brand"><span class="logo">A</span> Atlas <b>Workforce</b></div>
+  <div class="search"><input type="text" placeholder="Search people, positions, reports…" aria-label="Search"></div>
+  <div class="top-right">
+    <button class="bell" data-act="nav" data-view="overview" title="Tasks"><span>Tasks</span><span class="count hidden" id="bellCount">0</span></button>
+    <button class="icon-btn" data-act="decoy" title="Report view (Esc)">⧉</button>
+    <div class="avatar me" id="meAvatar">?</div>
+  </div>
+</header>
+<div class="layout">
+  <nav class="sidebar" id="nav"></nav>
+  <main class="main" id="view"></main>
+</div>
+
+<div class="ping hidden" id="ping" data-act="ping">
+  <div class="ping-head"><span class="dot"></span><b id="pingFrom"></b><span class="muted small">now</span></div>
+  <div id="pingMsg"></div>
+</div>
+<div class="toasts" id="toasts"></div>
+<div class="modal hidden" id="modal">
+  <div class="modal-box">
+    <h3 id="modalTitle"></h3>
+    <div id="modalBody"></div>
+    <div class="row right"><button class="btn hidden" id="modalCancel">Cancel</button><button class="btn primary" id="modalOk">OK</button></div>
+  </div>
+</div>
+
+<div class="decoy hidden" id="decoy">
+  <div class="decoy-page">
+    <div class="decoy-head">
+      <div><div class="muted small">Atlas Workforce · Talent Reviews</div><h1>H2 FY26 Performance Calibration</h1></div>
+      <div class="muted small">Draft · Visible to HR Business Partners</div>
+    </div>
+    <div class="decoy-kpis">
+      <div><label>Reviews submitted</label><b>87%</b><span class="muted">312 of 358</span></div>
+      <div><label>Calibration sessions</label><b>14 / 19</b><span class="muted">5 remaining</span></div>
+      <div><label>Distribution vs guidance</label><b>+2.1 pts</b><span class="down">above "Exceeds" target</span></div>
+      <div><label>Due</label><b>Nov 14</b><span class="muted">Comp planning opens Nov 21</span></div>
+    </div>
+    <div class="table-wrap"><table class="table">
+      <thead><tr><th>Organisation</th><th>Headcount</th><th>Submitted</th><th>Exceeds</th><th>Meets</th><th>Below</th><th>HRBP</th><th>Status</th></tr></thead>
+      <tbody>
+        <tr><td>Engineering</td><td>146</td><td>132</td><td>24%</td><td>68%</td><td>8%</td><td>L. Chen</td><td>Calibrating</td></tr>
+        <tr><td>Product &amp; Design</td><td>41</td><td>41</td><td>22%</td><td>71%</td><td>7%</td><td>L. Chen</td><td>Complete</td></tr>
+        <tr><td>Sales</td><td>88</td><td>70</td><td>27%</td><td>61%</td><td>12%</td><td>R. Okafor</td><td>Calibrating</td></tr>
+        <tr><td>Customer Success</td><td>39</td><td>35</td><td>19%</td><td>74%</td><td>7%</td><td>R. Okafor</td><td>Not started</td></tr>
+        <tr><td>Finance</td><td>18</td><td>18</td><td>17%</td><td>78%</td><td>5%</td><td>S. Patel</td><td>Complete</td></tr>
+        <tr><td>People &amp; Ops</td><td>26</td><td>16</td><td>23%</td><td>69%</td><td>8%</td><td>S. Patel</td><td>Calibrating</td></tr>
+      </tbody>
+    </table></div>
+    <p class="muted small">Ratings are provisional until calibration is complete. Do not share with employees before Nov 28.</p>
+  </div>
+</div>
+
+<script src="../config.js"></script>
+<script src="../shared/leaderboard.js"></script>
+<script src="data.js"></script>
+<script src="game.js"></script>
+</body>
+</html>
