@@ -105,11 +105,26 @@ window.WF_ART = (() => {
       + `<path d="M28.5 35Q32 37 35.5 35" stroke="${c}" stroke-width="1.6" fill="none" stroke-linecap="round"/>`;
   }
 
+  function dog(look) {
+    const f = look.fur || '#e2a857', d = shade(f, -0.22), l = shade(f, 0.4);
+    return `<rect width="64" height="64" fill="${look.bg || '#fdf0d5'}"/>`
+      + `<path d="M12 64C12 52 20 46 32 46S52 52 52 64Z" fill="${f}"/><path d="M25 64C25 56 28 52.5 32 52.5S39 56 39 64Z" fill="${l}"/>`
+      + `<path d="M20.5 45.5Q32 51 43.5 45.5L44.5 48.6Q32 54.6 19.5 48.6Z" fill="#d6336c"/><circle cx="32" cy="53.2" r="2.6" fill="#f4c542" stroke="#c99a1e" stroke-width=".8"/>`
+      + `<path d="M18 17C11.5 19 9 31 12.5 40C15 42.5 18.6 40.5 19.6 36L21.5 22Z" fill="${d}"/><path d="M46 17C52.5 19 55 31 51.5 40C49 42.5 45.4 40.5 44.4 36L42.5 22Z" fill="${d}"/>`
+      + `<ellipse cx="32" cy="28" rx="14" ry="15" fill="${f}"/><path d="M27 14.5Q32 12.5 37 14.5Q35 19 32 19.5Q29 19 27 14.5Z" fill="${l}" opacity=".7"/>`
+      + `<ellipse cx="32" cy="36" rx="8.8" ry="6.8" fill="${l}"/>`
+      + `<circle cx="26" cy="27" r="2" fill="${INK}"/><circle cx="38" cy="27" r="2" fill="${INK}"/><circle cx="26.7" cy="26.3" r=".65" fill="#fff"/><circle cx="38.7" cy="26.3" r=".65" fill="#fff"/>`
+      + `<path d="M23.4 23.2Q26 21.9 28.4 23.1M35.6 23.1Q38 21.9 40.6 23.2" stroke="${d}" stroke-width="1.2" fill="none" stroke-linecap="round"/>`
+      + `<ellipse cx="32" cy="32.8" rx="3.1" ry="2.3" fill="#2b2220"/><circle cx="31" cy="32.2" r=".7" fill="#fff" opacity=".5"/>`
+      + `<path d="M32 35V37M28.4 37.2Q32 40 35.6 37.2" stroke="#2b2220" stroke-width="1.1" fill="none" stroke-linecap="round"/><path d="M30.3 38.4Q32 43.8 33.7 38.4Z" fill="#ef6f8a"/>`;
+  }
+
   // Returns an inline SVG. opts.mono draws a grey silhouette (for people not hired yet).
   function avatar(look, opts = {}) {
     let inner;
     if (!look) look = {};
-    if (look.bot) inner = bot(look);
+    if (look.dog) inner = dog(look);
+    else if (look.bot) inner = bot(look);
     else {
       const skin = SKIN[look.skin == null ? 1 : look.skin];
       const hairC = look.hc || '#2b2018';
@@ -153,7 +168,7 @@ window.WF_ART = (() => {
     return `<svg viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><rect width="32" height="32" rx="8" fill="${LOGO_COLORS[h % LOGO_COLORS.length]}"/>${GLYPHS[(h >>> 8) % GLYPHS.length]}</svg>`;
   }
 
-  const RARITY_COLORS = ['#98a2b3', '#12805c', '#1d6fd1', '#7a3fd1', '#c26a00'];
+  const RARITY_COLORS = ['#98a2b3', '#12805c', '#1d6fd1', '#7a3fd1', '#c26a00', '#d6336c'];
   function gearIcon(slot, r = 0) {
     const c = RARITY_COLORS[r];
     const paths = {
@@ -182,6 +197,59 @@ window.WF_ART = (() => {
     return `<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9.5" fill="${c}" fill-opacity=".15" stroke="${c}" stroke-width="1.6"/><circle cx="9" cy="10" r="1.2" fill="${c}"/><circle cx="15" cy="10" r="1.2" fill="${c}"/><path d="${mouthD}" stroke="${c}" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg>`;
   }
 
+  // ------------------------------------------------------------------ blind boxes
+
+  const BOX_COLORS = { single: ['#c99a64', '#d94848'], fair: ['#3b6fd8', '#f2c14e'], legend: ['#e6b422', '#7c3aed'] };
+  function box(kind = 'single') {
+    const [c, rb] = BOX_COLORS[kind] || BOX_COLORS.single;
+    const d = shade(c, -0.18), l = shade(c, 0.16);
+    const sparkle = (x, y, r) => `<path d="M${x} ${y - r}L${x + r * 0.28} ${y - r * 0.28}L${x + r} ${y}L${x + r * 0.28} ${y + r * 0.28}L${x} ${y + r}L${x - r * 0.28} ${y + r * 0.28}L${x - r} ${y}L${x - r * 0.28} ${y - r * 0.28}Z" fill="#ffd54a"/>`;
+    return `<svg viewBox="0 0 96 96" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">`
+      + `<ellipse cx="48" cy="88" rx="30" ry="5" fill="#000" opacity=".12"/>`
+      + `<path d="M19 37H77V81Q77 85 73 85H23Q19 85 19 81Z" fill="${c}"/><path d="M19 37H77V44H19Z" fill="${d}" opacity=".45"/>`
+      + `<path d="M44 37H52V85H44Z" fill="${rb}"/>`
+      + `<circle cx="31" cy="63" r="8.5" fill="#fff" opacity=".92"/><text x="31" y="67.5" text-anchor="middle" font-size="13" font-weight="800" font-family="system-ui,sans-serif" fill="${d}">?</text>`
+      + `<g class="box-lid"><path d="M15 27Q15 24 18 24H78Q81 24 81 27V38H15Z" fill="${l}"/><path d="M44 24H52V38H44Z" fill="${shade(rb, 0.12)}"/>`
+      + `<path d="M48 24C41 12 30 13.5 33 20.5C35 24.5 44 24 48 24ZM48 24C55 12 66 13.5 63 20.5C61 24.5 52 24 48 24Z" fill="${rb}"/><circle cx="48" cy="23.5" r="3" fill="${shade(rb, -0.15)}"/></g>`
+      + (kind === 'legend' ? sparkle(14, 16, 5) + sparkle(84, 30, 4) + sparkle(80, 8, 3) : '')
+      + '</svg>';
+  }
+
+  // ------------------------------------------------------------------ price chart
+  // The plot is an SVG stretched to its box (the 2px line keeps its width); labels and the end dot are HTML,
+  // so text never stretches with it. game.js adds the hover crosshair using chartScale().
+
+  function chartScale(points) {
+    const xs = points.map(p => p[0]), ys = points.map(p => p[1]);
+    const x0 = Math.min(...xs), x1 = Math.max(...xs);
+    let y0 = Math.min(...ys), y1 = Math.max(...ys);
+    const span = Math.max(y1 - y0, Math.abs(y1) * 0.04, 1e-9), mid = (y0 + y1) / 2;
+    y0 = Math.min(y0, mid - span / 2) - span * 0.15;
+    y1 = Math.max(y1, mid + span / 2) + span * 0.15;
+    return { x0, x1: x1 > x0 ? x1 : x0 + 1, y0, y1 };
+  }
+  function niceTicks(y0, y1) {
+    const raw = (y1 - y0) / 3;
+    const mag = Math.pow(10, Math.floor(Math.log10(raw)));
+    const step = [1, 2, 2.5, 5, 10].map(m => m * mag).find(v => v >= raw);
+    const out = [];
+    for (let v = Math.ceil(y0 / step) * step; v <= y1 && out.length < 6; v += step) out.push(v);
+    return out;
+  }
+  function chart(points, opts = {}) {
+    const W = 600, H = 200, c = opts.color || '#0b8aa8';
+    const sc = chartScale(points);
+    const X = t => ((t - sc.x0) / (sc.x1 - sc.x0)) * W;
+    const Y = v => H - ((v - sc.y0) / (sc.y1 - sc.y0)) * H;
+    const line = points.map((p, i) => `${i ? 'L' : 'M'}${X(p[0]).toFixed(1)} ${Y(p[1]).toFixed(1)}`).join('');
+    const first = points[0], last = points[points.length - 1];
+    const ticks = niceTicks(sc.y0, sc.y1).map(v => `<div class="ch-tick" style="top:${(100 * Y(v) / H).toFixed(2)}%"><span>${opts.fmt ? opts.fmt(v) : v}</span></div>`).join('');
+    return `<div class="ch-plot" tabindex="0" aria-label="${opts.label || 'Price chart'}">${ticks}`
+      + `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true"><path d="${line}L${X(last[0]).toFixed(1)} ${H}L${X(first[0]).toFixed(1)} ${H}Z" fill="${c}" fill-opacity=".1"/>`
+      + `<path d="${line}" fill="none" stroke="${c}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/></svg>`
+      + `<i class="ch-dot" style="left:${(100 * X(last[0]) / W).toFixed(2)}%;top:${(100 * Y(last[1]) / H).toFixed(2)}%;background:${c}"></i>`
+      + '<i class="ch-cross hidden"></i><i class="ch-hdot hidden" style="background:' + c + '"></i><div class="ch-tip hidden"></div></div>';
+  }
   // ------------------------------------------------------------------ floor plan
   // 720×360. Zones open as funding rounds land; furniture appears as you build.
   const FP = { w: 720, h: 360 };
@@ -325,5 +393,5 @@ window.WF_ART = (() => {
     return { x: (p.x / FP.w) * 100, y: (p.y / FP.h) * 100 };
   }
 
-  return { avatar, logo, gearIcon, roleIcon, moodFace, STAR, floor, spot, DESK_COUNT: DESKS.length, RARITY_COLORS, shade };
+  return { avatar, logo, gearIcon, roleIcon, moodFace, STAR, floor, spot, box, chart, chartScale, DESK_COUNT: DESKS.length, RARITY_COLORS, shade };
 })();

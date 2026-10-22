@@ -22,6 +22,7 @@
     return (v < 10 ? v.toFixed(2) : v < 100 ? v.toFixed(1) : Math.round(v)) + SUFFIX[tier];
   }
   const money = n => '$' + fmt(n);
+  const price = v => '$' + v.toFixed(2);
   function fmtDur(sec) {
     sec = Math.max(0, Math.ceil(sec));
     if (sec < 60) return sec + 's';
@@ -70,7 +71,7 @@
     const p = E.PEOPLE[id], st = S.staff[id];
     let suffix = '';
     for (const [l, t] of D.TITLES) if (st && st.lvl >= l) suffix = t;
-    const base = p.r === 0 ? `${D.ROLES[p.role].name} Intern` : p.r === 1 ? D.ROLE_NOUN[p.role] : `${D.RARITY[p.r].name} ${D.ROLE_NOUN[p.role]}`;
+    const base = p.title || (p.r === 0 ? `${D.ROLES[p.role].name} Intern` : p.r === 1 ? D.ROLE_NOUN[p.role] : `${D.RARITY[p.r].name} ${D.ROLE_NOUN[p.role]}`);
     return suffix ? `${base} ${suffix}` : base;
   }
   const av = (id, cls = '') => `<span class="av ${cls}">${A.avatar(who(id).look)}</span>`;
@@ -82,12 +83,16 @@
   const moodWord = m => (m >= 80 ? 'Thriving' : m >= 60 ? 'Happy' : m >= 40 ? 'Okay' : m >= 25 ? 'Stressed' : 'Burnt out');
   function statusOf(id) {
     const t = now();
+    if (E.PEOPLE[id].noWork) return { cls: 'busy', text: 'Being a very good boy' };
     if (E.resting(id)) return { cls: 'rest', text: `Recharging · ${fmtDur((S.staff[id].restUntil - t) / 1000)}` };
     const w = S.ws.find(x => x && x.team.includes(id));
     if (w) return { cls: 'busy', text: t >= w.end ? `Done: ${w.offer.name}` : `On ${w.offer.name}` };
     return { cls: '', text: 'Available' };
   }
   const sizeLabel = o => `${D.SIZES[o.size].name} · ${fmtDur(o.dur)}`;
+  const abilityHtml = p => (p.ability ? `<div class="ability"><b>⚡ ${esc(p.ability.name)}</b><span>${esc(p.ability.desc)}</span></div>` : '');
+  const pct = (v, digits = 1) => `${v >= 0 ? '▲' : '▼'} ${Math.abs(v * 100).toFixed(digits)}%`;
+  const upDown = v => (v >= 0 ? 'gain' : 'loss');
 
   // ================================================================ navigation
 
@@ -104,41 +109,45 @@
     more: '<circle cx="5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="19" cy="12" r="1.3"/>',
     report: '<path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5M9 13h7M9 17h7"/>',
     install: '<rect x="7" y="2.5" width="10" height="19" rx="2"/><path d="M12 7v7M9 11l3 3 3-3"/>',
+    breaks: '<path d="M5 9h11v5a5 5 0 0 1-5 5h-1a5 5 0 0 1-5-5z"/><path d="M16 10.5h1.5a2.5 2.5 0 0 1 0 5H16M8.5 3.5c-.6 1 .6 1.6 0 2.8M12 3.5c-.6 1 .6 1.6 0 2.8"/>',
+    investors: '<path d="M4 19h16M5 15l4.5-4.5 3.5 3 6-6.5"/><path d="M15 7h4v4"/>',
   };
   const icon = k => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON[k]}</svg>`;
   const NAV = [
     ['WORK', [['home', 'Home'], ['projects', 'Projects'], ['inbox', 'Inbox']]],
-    ['PEOPLE', [['team', 'Team'], ['hiring', 'Hiring', 'hiring']]],
-    ['COMPANY', [['office', 'Office'], ['league', 'League', 'league'], ['career', 'Career']]],
+    ['PEOPLE', [['team', 'Team'], ['hiring', 'Hiring', 'hiring'], ['breaks', 'Breaks', 'breaks']]],
+    ['COMPANY', [['office', 'Office'], ['league', 'League', 'league'], ['investors', 'Investors', 'ipo'], ['career', 'Career']]],
     ['', [['settings', 'Settings']]],
   ];
   const LABEL = Object.fromEntries(NAV.flatMap(([, items]) => items.map(([v, l]) => [v, l])));
   const GATE = Object.fromEntries(NAV.flatMap(([, items]) => items.filter(x => x[2]).map(([v, , g]) => [v, g])));
   const TABS = ['home', 'projects', 'inbox', 'team'];
-  const MORE = ['hiring', 'office', 'league', 'career', 'settings'];
+  const MORE = ['hiring', 'breaks', 'office', 'league', 'investors', 'career', 'settings'];
   const phoneQuery = window.matchMedia('(max-width: 700px)');
   const compact = () => phoneQuery.matches;
   let view = 'home';
 
   const gateLevel = g => (D.UNLOCKS.find(u => u.id === g) || {}).career;
+  const gateText = v => (GATE[v] === 'ipo' ? 'At IPO' : `Career ${gateLevel(GATE[v])}`);
   const isLocked = v => GATE[v] && !E.unlocked(GATE[v]);
   const pendingCount = () => S.inbox.filter(m => m.choices && !m.done).length;
   function navBadge(v) {
     if (v === 'inbox') return pendingCount();
     if (v === 'projects') return E.ready().length;
-    if (v === 'hiring') return S.referrals >= 1 ? S.referrals : 0;
+    if (v === 'hiring') return Math.floor(S.referrals) + S.tickets;
+    if (v === 'breaks') return E.gamesReady().length;
     return 0;
   }
   const isNew = v => GATE[v] && E.unlocked(GATE[v]) && !S.seen[v];
 
   function renderNav() {
     $('#nav').innerHTML = NAV.map(([sec, items]) => (sec ? `<div class="nav-section">${sec}</div>` : '<div class="nav-section">&nbsp;</div>') + items.map(([v, label]) => {
-      if (isLocked(v)) return `<div class="nav locked">${icon(v)}${label}<span class="lock">Career ${gateLevel(GATE[v])}</span></div>`;
+      if (isLocked(v)) return `<div class="nav locked">${icon(v)}${label}<span class="lock">${gateText(v)}</span></div>`;
       const b = navBadge(v);
       return `<button class="nav ${v === view ? 'active' : ''}" data-act="nav" data-view="${v}" data-coach="nav-${v}">${icon(v)}${label}${isNew(v) ? '<span class="new">New</span>' : b ? `<span class="count">${b > 99 ? '99+' : b}</span>` : ''}</button>`;
     }).join('')).join('');
     const inMore = !TABS.includes(view);
-    const moreAlert = MORE.some(v => isNew(v)) || (E.unlocked('hiring') && S.referrals >= 5);
+    const moreAlert = MORE.some(v => isNew(v)) || (E.unlocked('hiring') && (S.referrals >= 5 || S.tickets >= 1));
     $('#tabbar').innerHTML = TABS.map(v => {
       const b = navBadge(v);
       return `<button class="tab-btn ${v === view ? 'active' : ''}" data-act="nav" data-view="${v}" data-coach="tab-${v}">${icon(v)}<span>${LABEL[v]}</span>${b ? `<span class="count">${b > 99 ? '99+' : b}</span>` : ''}</button>`;
@@ -148,7 +157,7 @@
   }
   function renderSheet() {
     $('#sheetBox').innerHTML = '<div class="sheet-handle"></div>' + MORE.map(v => {
-      if (isLocked(v)) return `<div class="sheet-item locked">${icon(v)}<span>${LABEL[v]}</span><span class="right">Career ${gateLevel(GATE[v])}</span></div>`;
+      if (isLocked(v)) return `<div class="sheet-item locked">${icon(v)}<span>${LABEL[v]}</span><span class="right">${gateText(v)}</span></div>`;
       const b = navBadge(v);
       return `<button class="sheet-item ${v === view ? 'active' : ''}" data-act="nav" data-view="${v}" data-coach="sheet-${v}">${icon(v)}<span>${LABEL[v]}</span>${isNew(v) ? '<span class="right new">New</span>' : b ? `<span class="right count">${b}</span>` : ''}</button>`;
     }).join('') + '<div class="sheet-sep"></div>'
@@ -159,7 +168,7 @@
   const closeSheet = () => $('#sheet').classList.add('hidden');
 
   function go(v) {
-    if (isLocked(v)) return toast(`${LABEL[v]} unlocks at career level ${gateLevel(GATE[v])}`);
+    if (isLocked(v)) return toast(GATE[v] === 'ipo' ? 'Investors opens when Atlas goes public' : `${LABEL[v]} unlocks at career level ${gateLevel(GATE[v])}`);
     view = v;
     S.seen[v] = true;
     closeSheet();
@@ -200,10 +209,29 @@
         <div class="ws-meta">${stack(w.team)}<span class="muted small">${sizeLabel(w.offer)}</span>${w.offer.vip ? '<span class="chip vip">VIP</span>' : ''}</div>
         ${done ? '<div class="small good">Delivered. Waiting for your sign-off.</div>' : `<div class="bar"><div class="fill" data-progress="${i}" style="width:${clamp((now() - w.start) / (w.end - w.start), 0, 1) * 100}%"></div></div><div class="muted small" data-eta="${w.end}"></div>`}
       </div>
-      ${done ? `<button class="btn primary glow" data-act="signoff" data-slot="${i}" data-coach="signoff">Sign off</button>` : ''}
+      ${done ? `<button class="btn primary glow" data-act="signoff" data-slot="${i}" data-coach="signoff">Sign off</button>`
+        : E.unlocked('rush') ? `<button class="btn rush" data-act="rush" data-slot="${i}" ${S.shots < 1 ? 'disabled' : ''} title="Use an espresso shot: halves the time left">⚡ Rush</button>` : ''}
     </div>`;
   }
+  // Espresso shots: how many, and when the next one arrives.
+  function shotsHtml() {
+    if (!E.unlocked('rush')) return '';
+    const n = Math.floor(S.shots + 1e-9);
+    const cap = E.shotCap();
+    const next = n < cap ? ` · next in ${fmtDur((1 - (S.shots % 1)) * D.BALANCE.shotMinutes * 60)}` : '';
+    return `<span class="shots" title="Espresso shots rush a project">☕ ${n} shot${n === 1 ? '' : 's'}<span class="muted">${next}</span></span>`;
+  }
+  function boostHtml() {
+    const left = (S.boost.until - now()) / 1000;
+    return left > 0 ? `<span class="chip boost">📈 Revenue +${Math.round((S.boost.mult - 1) * 100)}% · ${fmtDur(left)}</span>` : '';
+  }
   const wsList = () => `<div class="ws-list">${Array.from({ length: E.wsCount() }, (_, i) => wsItem(S.ws[i], i)).join('')}</div>`;
+  function tickerChip(big) {
+    const st = S.stock;
+    if (!st) return '';
+    const ch = st.price / st.open - 1;
+    return `<button class="ticker ${big ? 'big' : ''}" data-act="nav" data-view="investors"><b>${st.ticker}</b> ${price(st.price)} <span class="${upDown(ch)}">${pct(ch)}</span></button>`;
+  }
 
   function floorModel() {
     const zones = {};
@@ -224,6 +252,7 @@
     const phase = (hashStr(id) + Math.floor(t / (7 * 60e3))) % 10;
     const pending = S.inbox.some(m => m.from === id && m.choices && !m.done);
     const desk = idx < desks ? A.spot('desk', idx) : null;
+    if (E.PEOPLE[id].noWork) return { p: A.spot(E.zoneOpen('lounge') && phase < 6 ? 'lounge' : 'coffee', idx), b: '🐾' };
     if (E.resting(id)) return { p: A.spot(E.zoneOpen('lounge') ? 'lounge' : 'coffee', idx), b: '💤' };
     const w = S.ws.find(x => x && x.team.includes(id));
     if (w) {
@@ -264,9 +293,9 @@
   function commitChip() {
     if (!E.unlocked('commit') || !S.commit) return '';
     const c = S.commit;
-    if (c.tier === null) return `<button class="commit" data-act="nav" data-view="inbox">🎯 <b>Set today's commitment</b></button>`;
+    if (c.tier === null) return `<button class="commit" data-act="nav" data-view="inbox">🎯 <b>Set today's ${c.ipo ? 'guidance' : 'commitment'}</b></button>`;
     const pips = Array.from({ length: Math.min(c.target, 24) }, (_, i) => `<i class="${i < c.progress ? 'on' : ''}"></i>`).join('');
-    return `<div class="commit ${c.paid ? 'done' : ''}">🎯 <b>${E.COMMIT_NAMES[c.tier]}</b><span class="pips">${pips}</span><span>${Math.min(c.progress, c.target)}/${c.target}${c.paid ? ' ✓' : ''}</span></div>`;
+    return `<div class="commit ${c.paid ? 'done' : ''}">🎯 <b>${esc(E.commitName(c.tier))}</b><span class="pips">${pips}</span><span>${Math.min(c.progress, c.target)}/${c.target}${c.paid ? ' ✓' : ''}</span></div>`;
   }
 
   // ================================================================ views
@@ -277,7 +306,7 @@
     const h = new Date().getHours();
     return `Good ${h < 12 ? 'morning' : h < 18 ? 'afternoon' : 'evening'}${S.name ? ', ' + esc(S.name) : ''}`;
   }
-  const NEXT_ICON = { signoff: '✅', inbox: '💬', quickstart: '▶️', projects: '📁', office: '🏢', hiring: '🤝', home: '⏳' };
+  const NEXT_ICON = { signoff: '✅', inbox: '💬', quickstart: '▶️', projects: '📁', office: '🏢', hiring: '🎁', home: '⏳', breaks: '☕', investors: '📈' };
   function nextCard() {
     const step = E.nextStep();
     let btn = '';
@@ -286,7 +315,10 @@
     else if (step.action === 'inbox') btn = '<button class="btn primary" data-act="nav" data-view="inbox" data-coach="next">Open inbox</button>';
     else if (step.action === 'projects') btn = '<button class="btn primary" data-act="nav" data-view="projects" data-coach="next">Go to projects</button>';
     else if (step.action === 'office') btn = '<button class="btn primary" data-act="nav" data-view="office" data-coach="next">Open the office</button>';
-    else if (step.action === 'hiring') btn = '<button class="btn primary" data-act="nav" data-view="hiring" data-coach="next">Interview</button>';
+    else if (step.action === 'hiring') btn = '<button class="btn primary" data-act="nav" data-view="hiring" data-coach="next">Open Hiring</button>';
+    else if (step.action === 'breaks') btn = '<button class="btn primary" data-act="nav" data-view="breaks" data-coach="next">Take a break</button>';
+    else if (step.action === 'investors') btn = '<button class="btn primary" data-act="nav" data-view="investors" data-coach="next">Open Investors</button>';
+    else if (step.wait && step.slot >= 0 && E.unlocked('rush') && S.shots >= 1) btn = `<button class="btn rush" data-act="rush" data-slot="${step.slot}" data-coach="next">⚡ Rush it</button>`;
     return `<div class="card next"><div class="next-ico">${NEXT_ICON[step.action] || '•'}</div><div class="grow"><div class="muted small">Next step</div><b>${esc(step.text)}</b>
       ${step.at ? `<div class="muted small" data-eta="${step.at}"></div>` : ''}</div>${btn}</div>`;
   }
@@ -302,14 +334,27 @@
     return `<div class="msgs">${list.map(m => msgCard(m, true)).join('')}</div>`;
   }
 
+  function breaksCard() {
+    if (!E.unlocked('breaks')) return '';
+    const ready = E.gamesReady();
+    const items = Object.entries(D.GAMES).map(([k, g]) => {
+      const on = ready.includes(k);
+      const sub = on ? 'Ready' : k === 'word' ? 'Done for today' : `in ${fmtDur((E.gameReadyAt(k) - now()) / 1000)}`;
+      return `<button class="break-btn ${on ? 'on' : ''}" data-act="game" data-g="${k}"><span class="bi">${GAME_ICON[k]}</span><span><b>${esc(g.name)}</b><span class="muted small">${sub}</span></span></button>`;
+    }).join('');
+    return `<div class="card"><div class="card-title">Breaks <span class="muted small">· two-minute games, each pays a boost</span><span class="spacer"></span>${boostHtml()}</div><div class="break-row">${items}</div></div>`;
+  }
+  const GAME_ICON = { word: '🔤', expense: '🧾', memory: '☕' };
+
   VIEWS.home = () => `
-    <div class="page-head"><div><div class="muted small">${greeting()}</div><h1>Home</h1></div>${commitChip()}</div>
+    <div class="page-head"><div><div class="muted small">${greeting()}</div><h1>Home</h1></div>${tickerChip()}${commitChip()}</div>
     ${nextCard()}
     ${installCard()}
     <div class="home-grid">
       <div class="card home-floor"><div class="card-title">Floor plan <span class="muted small">· ${D.FUNDING[S.funding].name}</span><span class="spacer"></span><button class="btn sm ghost" data-act="nav" data-view="office">Office</button></div>${floorHtml()}</div>
       <div class="home-side">
-        <div class="card"><div class="card-title">Projects in flight<span class="spacer"></span><button class="btn sm ghost" data-act="nav" data-view="projects">All offers</button></div>${wsList()}</div>
+        <div class="card"><div class="card-title">Projects in flight<span class="spacer"></span>${shotsHtml()}<button class="btn sm ghost" data-act="nav" data-view="projects">All offers</button></div>${wsList()}</div>
+        ${breaksCard()}
         <div class="card"><div class="card-title">Inbox ${pendingCount() ? `<span class="count">${pendingCount()}</span>` : ''}<span class="spacer"></span><button class="btn sm ghost" data-act="nav" data-view="inbox">Open</button></div>${inboxPreview()}</div>
       </div>
     </div>
@@ -334,7 +379,7 @@
     const busy = S.ws.filter(Boolean).length;
     const cd = S.refreshAt - now();
     return `
-    <div class="page-head"><div><div class="muted small">${busy}/${E.wsCount()} workstreams busy${E.wsCount() < 5 ? ' · more with meeting rooms' : ''}</div><h1>Projects</h1></div>
+    <div class="page-head"><div><div class="muted small">${busy}/${E.wsCount()} workstreams busy${E.wsCount() < 5 ? ' · more with meeting rooms' : ''}</div><h1>Projects</h1></div>${shotsHtml()}${boostHtml()}
       <div class="actions"><button class="btn" data-act="refresh" ${cd > 0 ? 'disabled' : ''}>${cd > 0 ? `New offers in ${fmtDur(cd / 1000)}` : 'Refresh offers'}</button></div></div>
     <div class="card"><div class="card-title">In flight</div>${wsList()}</div>
     <div class="card"><div class="card-title">Offers <span class="muted small">· sized to your team</span></div><div class="offers">${S.offers.map(offerCard).join('')}</div>
@@ -360,10 +405,10 @@
     else if (m.reactions && m.done && !mini) body = `<div class="reply muted small">You reacted ${m.done.reaction}</div>`;
     let cta = '';
     if (m.unlock && !mini) {
-      const target = { hiring: 'hiring', league: 'league', commit: 'inbox', gear: 'team' }[m.unlock];
+      const target = { hiring: 'hiring', league: 'league', commit: 'inbox', gear: 'team', breaks: 'breaks' }[m.unlock];
       if (target && target !== 'inbox') cta = `<div class="choices"><button class="btn" data-act="nav" data-view="${target}">Open ${LABEL[target]}</button></div>`;
     }
-    const cls = [pending ? 'pending' : '', m.read ? '' : 'unread', m.kind === 'outcome' ? (m.good ? 'outcome-good' : 'outcome-bad') : '', m.kind === 'funding' ? 'funding' : ''].join(' ');
+    const cls = [pending ? 'pending' : '', m.read ? '' : 'unread', m.kind === 'outcome' ? (m.good ? 'outcome-good' : 'outcome-bad') : '', m.kind === 'funding' || m.kind === 'milestone' ? 'funding' : '', m.farewell ? 'farewell' : ''].join(' ');
     const extra = m.kind === 'funding' ? `<div class="small good" style="margin-top:6px">+${money(m.amount)} funding · revenue ×1.5 for good · new office space</div>` : '';
     return `<div class="msg ${cls}">${av(m.from, 'sm')}<div class="grow"><div class="msg-head"><span class="msg-name">${esc(w.name)}</span><span class="muted small">${esc(w.title)} · ${ago(m.at)}</span></div>
       <div class="msg-text">${esc(m.text)}</div>${extra}${body}${cta}</div></div>`;
@@ -380,9 +425,10 @@
     const st = S.staff[id], p = E.PEOPLE[id];
     const s = statusOf(id);
     const need = E.xpNeed(st.lvl);
-    return `<button class="pcard" data-act="profile" data-id="${id}">${av(id, 'lg')}<div class="grow">
+    return `<button class="pcard ${p.r === 5 ? 'legend' : ''}" data-act="profile" data-id="${id}">${av(id, 'lg')}<div class="grow">
       <b>${esc(p.name)}</b><div class="muted small">${esc(jobTitle(id))}</div>
       <div class="pc-row">${band(p.r)}${st.stars ? starsHtml(st.stars) : ''}</div>
+      ${p.ability ? `<div class="pc-row ability-tag">⚡ ${esc(p.ability.name)}</div>` : ''}
       <div class="pc-row"><span class="nowrap">Lvl ${st.lvl}</span><div class="bar thin"><div class="fill" style="width:${100 * st.xp / need}%"></div></div></div>
       <div class="pc-row">${A.moodFace(st.mood)}<span>${moodWord(st.mood)}</span>${heartsHtml(id)}</div>
       <div class="pc-row"><span class="status-tag ${s.cls}">${esc(s.text)}</span></div></div></button>`;
@@ -390,28 +436,109 @@
   VIEWS.team = () => {
     const ids = E.owned().sort((a, b) => E.skill(b) - E.skill(a));
     return `<div class="page-head"><div><div class="muted small">${ids.length} ${ids.length === 1 ? 'person' : 'people'} · tap someone to see their profile</div><h1>Team</h1></div>
-      ${E.unlocked('hiring') ? `<div class="actions"><button class="btn primary" data-act="nav" data-view="hiring">Hire${S.referrals ? ` (${S.referrals} referral${S.referrals > 1 ? 's' : ''})` : ''}</button></div>` : ''}</div>
+      ${E.unlocked('hiring') ? `<div class="actions"><button class="btn primary" data-act="nav" data-view="hiring">🎁 Hire${S.referrals >= 1 ? ` (${Math.floor(S.referrals)})` : ''}</button></div>` : ''}</div>
       <div class="people">${ids.map(personCard).join('')}</div>
-      <p class="muted small">People level up by delivering projects. Happy, rested people with matching skills earn better reviews. Coffee chats build bonds, and bonds unlock their stories.</p>`;
+      <p class="muted small">People level up by delivering projects. Happy, rested people with matching skills earn better reviews. Coffee chats build bonds, and bonds unlock their stories. Open someone's profile to let them go.</p>`;
   };
 
   VIEWS.hiring = () => {
-    const w = D.RARITY.map((r, i) => r.weight * (i >= 2 ? 1 + 0.15 * E.lvl('recruit') : 1));
+    const w = E.rarityWeights();
     const tw = w.reduce((a, b) => a + b, 0);
+    const fid = E.featured();
+    const fp = E.PEOPLE[fid];
+    const ws = E.weekStart(now()) + 7 * 86400e3;
+    const refs = Math.floor(S.referrals);
+    const pack = (kind) => {
+      const pk = D.PACKS[kind];
+      const can = pk.ticket ? S.tickets >= 1 : refs >= pk.cost;
+      const cost = pk.ticket ? `${S.tickets} ticket${S.tickets === 1 ? '' : 's'}` : `${pk.cost} referral${pk.cost > 1 ? 's' : ''}`;
+      return `<div class="pack ${kind}"><div class="pack-box">${A.box(kind)}</div><b>${esc(pk.name)}</b><span class="muted small">${esc(pk.desc)}</span>
+        <button class="btn ${can ? 'primary' : ''}" data-act="pack" data-k="${kind}" ${can ? '' : 'disabled'} data-coach="pack-${kind}">Open · ${cost}</button></div>`;
+    };
     const dir = D.PEOPLE.map(p => {
       const st = S.staff[p.id];
-      return `<div class="dir-p ${st ? '' : 'no'}"><span class="av lg">${A.avatar(p.look, { mono: !st })}</span><b>${st ? esc(p.name) : '???'}</b>${band(p.r)}<span class="muted">${st ? (st.stars ? starsHtml(st.stars) : 'Lvl ' + st.lvl) : esc(D.ROLES[p.role].name)}</span></div>`;
+      const gone = !st && S.alumni[p.id];
+      return `<div class="dir-p ${st ? '' : 'no'} ${p.r === 5 ? 'legend' : ''}"><span class="av lg">${A.avatar(p.look, { mono: !st })}</span><b>${st || gone ? esc(p.name) : '???'}</b>${band(p.r)}<span class="muted">${st ? (st.stars ? starsHtml(st.stars) : 'Lvl ' + st.lvl) : gone ? 'Alumni' : esc(D.ROLES[p.role].name)}</span></div>`;
     }).join('');
-    return `<div class="page-head"><div><div class="muted small">${S.referrals} referral${S.referrals === 1 ? '' : 's'} · each one is an interview</div><h1>Hiring</h1></div>
-      <div class="actions"><button class="btn" data-act="interview" data-n="1" ${S.referrals < 1 ? 'disabled' : ''}>Interview 1</button>
-      <button class="btn primary" data-act="interview" data-n="5" ${S.referrals < 5 ? 'disabled' : ''}>Interview 5</button></div></div>
+    return `<div class="page-head"><div><div class="muted small">${refs} referral${refs === 1 ? '' : 's'}${S.tickets ? ` · ${S.tickets} Headhunter ticket${S.tickets > 1 ? 's' : ''}` : ''} · you only find out who you hired when you open the box</div><h1>Hiring</h1></div></div>
+      <div class="card featured"><span class="av xl">${A.avatar(fp.look)}</span><div class="grow"><div class="muted small">Featured Legend · until ${new Date(ws).toLocaleDateString(undefined, { weekday: 'long' })}</div>
+        <b class="fname">${esc(fp.name)}</b> <span class="muted small">${esc(fp.title)}</span>${band(5)}${abilityHtml(fp)}
+        <div class="muted small">Half of all Legend hires this week are ${esc(fp.name.split(' ')[0])}.${S.staff[fid] ? ' Already on your team: another copy is a promotion.' : ''}</div></div></div>
+      <div class="packs">${pack('single')}${pack('fair')}${S.tickets ? pack('legend') : ''}</div>
       <div class="grid2">
-        <div class="card"><div class="card-title">How hiring works</div><p class="small" style="margin-top:0">Every interview brings in a candidate. New faces join the team. Someone you already have gets <b>promoted</b> instead: each promotion star is +25% skill.</p>
-          <p class="muted small">Referrals come from your daily commitment, the weekly league, five-star reviews and the occasional decision.</p></div>
+        <div class="card"><div class="card-title">How it works</div><p class="small" style="margin-top:0">Every box holds one candidate. Someone new joins the team. Someone you already have gets <b>promoted</b> instead: each promotion star is +25% skill, up to five.</p>
+          <p class="muted small">Referrals come from your daily commitment, the daily word, the weekly league, five-star reviews and the odd decision. Legends also come with the IPO and big market-cap milestones.</p></div>
         <div class="card"><div class="card-title">Odds</div><table class="table"><tbody>${D.RARITY.map((r, i) => `<tr><td>${band(i)}</td><td class="num">${(100 * w[i] / tw).toFixed(1)}%</td></tr>`).join('')}</tbody></table>
-          <p class="muted small">Staff or better guaranteed within <b>${25 - S.pity}</b> interviews; Principal within <b>${80 - S.pityL}</b>.</p></div>
+          <p class="muted small">Guaranteed: Staff or better within <b>${25 - S.pity}</b> boxes, Principal or better within <b>${60 - S.pityL}</b>, a Legend within <b>${70 - S.pityX}</b>.</p></div>
       </div>
-      <div class="card"><div class="card-title">Directory <span class="muted small">${E.owned().length}/${D.PEOPLE.length} hired</span></div><div class="dir">${dir}</div></div>`;
+      <div class="card"><div class="card-title">Directory <span class="muted small">${E.owned().length}/${D.PEOPLE.length} on the team</span></div><div class="dir">${dir}</div></div>`;
+  };
+
+  VIEWS.breaks = () => {
+    const ready = E.gamesReady();
+    const ws = E.wordState();
+    const card = k => {
+      const g = D.GAMES[k];
+      const on = ready.includes(k);
+      let status;
+      if (k === 'word') status = ws.done ? (ws.won ? `Solved in ${ws.guesses.length} ✓${S.games.wordStreak > 1 ? ` · ${S.games.wordStreak}-day streak` : ''}` : 'Not today. New word tomorrow.') : `${6 - ws.guesses.length} tries left`;
+      else status = on ? 'Reward ready' : `Next reward in ${fmtDur((E.gameReadyAt(k) - now()) / 1000)} · play for fun meanwhile`;
+      const btn = k === 'word' && ws.done ? 'See result' : on ? 'Play' : 'Practise';
+      return `<div class="card game-card ${on ? 'on' : ''}"><div class="game-ico">${GAME_ICON[k]}</div><div class="grow"><b>${esc(g.name)}</b><div class="small">${esc(g.desc)}</div>
+        <div class="muted small">Reward: ${esc(g.reward)} · ${esc(status)}</div></div><button class="btn ${on ? 'primary' : ''}" data-act="game" data-g="${k}" data-coach="game-${k}">${btn}</button></div>`;
+    };
+    return `<div class="page-head"><div><div class="muted small">Wellbeing · two-minute brain breaks that pay out boosts</div><h1>Breaks</h1></div>${shotsHtml()}${boostHtml()}</div>
+      ${card('word')}${card('expense')}${card('memory')}
+      <p class="muted small">Espresso shots rush a running project. Revenue boosts stack: a new one adds time to the current one.</p>`;
+  };
+
+  // Price chart for the Investors page: the last 24 hours, or daily closes.
+  let chartRange = '24h';
+  function chartPoints() {
+    const st = S.stock;
+    let pts = chartRange === '24h' ? st.hist.slice() : st.days.map(([dk, v]) => [dayStart(dk), v]).concat([[now(), st.price]]);
+    if (chartRange === '24h' && pts[pts.length - 1][0] < now() - 1000) pts.push([now(), st.price]);
+    if (pts.length < 2) pts = [[pts[0][0] - 600e3, pts[0][1]], pts[0]];
+    return pts;
+  }
+  const dayStart = dk => { const [y, m, d] = dk.split('-').map(Number); return new Date(y, m - 1, d, 17).getTime(); };
+  const timeLabel = t => (chartRange === '24h' ? new Date(t).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }) : new Date(t).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }));
+
+  VIEWS.investors = () => {
+    const st = S.stock;
+    if (!st) return '<p class="muted">Investors opens when Atlas goes public.</p>';
+    const day = st.price / st.open - 1;
+    const since = st.price / st.ipoPrice - 1;
+    const cap = E.marketCap();
+    const next = E.capStep(st.capIdx), prevStep = st.capIdx > 0 ? E.capStep(st.capIdx - 1) : 0;
+    const nextName = E.capName(st.capIdx);
+    const tg = E.acqTarget();
+    const pts = chartPoints();
+    const c = S.commit;
+    const guidance = !c ? '' : c.tier === null
+      ? `<button class="btn primary" data-act="nav" data-view="inbox">Set today's guidance</button>`
+      : `<div class="small">Today's guidance: <b>${esc(E.commitName(c.tier))}</b> · ${Math.min(c.progress, c.target)}/${c.target} deliveries${c.paid ? ' · <span class="good">Beat ✓</span>' : ''}</div>`;
+    return `<div class="page-head"><div><div class="muted small">Atlas Inc. · public since ${new Date(st.ipoAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</div><h1>Investors</h1></div></div>
+      <div class="card stock-card">
+        <div class="stock-head"><div><div class="muted small">${st.ticker} · share price</div><div class="hero-price">${price(st.price)}</div>
+          <div class="small"><span class="${upDown(day)}">${pct(day, 2)}</span> today · <span class="${upDown(since)}">${pct(since, 0)}</span> since IPO</div></div>
+          <div class="stock-facts"><div><label>Market cap</label><b>${money(cap)}</b></div><div><label>All-time high</label><b>${price(st.ath)}</b></div><div><label>IPO price</label><b>${price(st.ipoPrice)}</b></div>${st.splits ? `<div><label>Splits</label><b>${st.splits}× 10-for-1</b></div>` : ''}</div></div>
+        <div class="seg" role="tablist"><button class="${chartRange === '24h' ? 'on' : ''}" data-act="range" data-r="24h">24 hours</button><button class="${chartRange === '30d' ? 'on' : ''}" data-act="range" data-r="30d">30 days</button></div>
+        <div class="chart" data-chart>${A.chart(pts, { fmt: v => '$' + (v >= 100 ? v.toFixed(0) : v.toFixed(2)), label: `${st.ticker} share price` })}
+          <div class="ch-x"><span>${esc(timeLabel(pts[0][0]))}</span><span>Now</span></div></div>
+        <details class="ch-table"><summary>Price table</summary><table class="table"><thead><tr><th>${chartRange === '24h' ? 'Time' : 'Day'}</th><th class="num">Price</th></tr></thead><tbody>
+          ${pts.filter((_, i, a) => chartRange !== '24h' || i % 6 === 0 || i === a.length - 1).slice(-12).reverse().map(p => `<tr><td>${esc(timeLabel(p[0]))}</td><td class="num">${price(p[1])}</td></tr>`).join('')}</tbody></table></details>
+      </div>
+      <div class="grid2">
+        <div class="card"><div class="card-title">Next milestone</div><div class="small"><b>${money(next)}</b> market cap${nextName ? ` · <b>${esc(nextName)}</b>` : ''}</div>
+          <div class="bar" style="margin:8px 0"><div class="fill green" style="width:${clamp(100 * (Math.log(cap) - Math.log(prevStep || cap / 2)) / (Math.log(next) - Math.log(prevStep || cap / 2)), 2, 100)}%"></div></div>
+          <p class="muted small" style="margin:0">Each milestone adds 5% revenue for good. Every power of ten also brings a Legend.</p></div>
+        <div class="card"><div class="card-title">Earnings</div><p class="small" style="margin-top:0">After the IPO every day is a quarter: your daily commitment is the guidance you give Wall Street. Beat it and ATLS pops; miss it and it drops.</p>${guidance}</div>
+      </div>
+      <div class="card acq"><span class="logo lg">${A.logo(tg.name)}</span><div class="grow"><div class="muted small">Acquisition target · ${esc(tg.sector)} · ${esc(tg.city)}</div><b>${esc(tg.name)}</b>
+        <div class="small">Revenue +15% for good${st.acq ? ` · you own ${st.acq} compan${st.acq === 1 ? 'y' : 'ies'} (+${Math.round(st.synergy * 100)}%)` : ''}</div></div>
+        <button class="btn ${S.cash >= tg.price ? 'primary' : ''}" data-act="acquire" ${S.cash >= tg.price ? '' : 'disabled'}>Buy · ${money(tg.price)}</button></div>
+      <div class="card"><div class="card-title">News</div><ul class="feed news">${st.feed.map(f => `<li><span class="t">${ago(f.t)}</span><span class="grow">${esc(f.text)}</span>${f.pct ? `<span class="${upDown(f.pct)} nowrap">${pct(f.pct, 0)}</span>` : ''}</li>`).join('') || '<li class="muted">Quiet day on the market.</li>'}</ul></div>`;
   };
 
   VIEWS.office = () => {
@@ -501,7 +628,7 @@
       <div class="row" style="margin-top:0"><button class="btn" data-act="transferImport">Import progress</button></div>
     </div>
     <div class="card"><div class="card-title">Help</div>
-      <p class="small" style="margin-top:0">Projects run in real time, even with this tab closed. Check in whenever suits you: sign off deliveries, answer your team, start the next project.</p>
+      <p class="small" style="margin-top:0">Projects run in real time, even with this tab closed. Check in whenever suits you: sign off deliveries, answer your team, start the next project. Waiting on something? Rush it with an espresso shot, or take a break: the mini-games pay out boosts.</p>
       <p class="muted small">${compact() ? 'Tap ⧉ at the top' : 'Press <b>Esc</b> or <b>`</b>'} for a very boring report.</p>
       <div class="row"><button class="btn danger" data-act="reset">Reset everything</button></div>
     </div>`;
@@ -513,7 +640,7 @@
     if (!force) {
       if (pointerDown || !$('#overlay').classList.contains('hidden')) return false;
       if (document.activeElement && root.contains(document.activeElement) && /INPUT|TEXTAREA/.test(document.activeElement.tagName)) return false;
-      if (view === 'settings') return false;
+      if (view === 'settings' || chartActive) return false;
     }
     const y = window.scrollY;
     const oldFloor = root.querySelector('.floor');
@@ -607,6 +734,7 @@
         ? `<div class="extra">${A.gearIcon(it.slot, it.r)}<span>${esc(D.GEAR[it.slot].items[it.r])} sold to IT surplus</span></div>`
         : `<div class="extra">${A.gearIcon(it.slot, it.r)}<span><b>${esc(D.GEAR[it.slot].items[it.r])}</b> for ${esc(who(it.owner).first)} (+${it.pct}% skill)</span></div>`);
     }
+    if (r.instant) out.push(`<div class="extra gold">⚡<span><b>${esc(who(r.team.find(id => E.PEOPLE[id].ability && E.PEOPLE[id].ability.id === 'warp')).first)}</b> delivered it the moment it started</span></div>`);
     if (r.refs) out.push('<div class="extra">🤝<span>The client referred someone. <b>+1 referral</b></span></div>');
     if (r.passed && r.passed.length) out.push(`<div class="extra">🏆<span>You passed <b>${r.passed.map(id => esc(who('rival:' + id).first)).join(', ')}</b> in the league</span></div>`);
     return out.join('');
@@ -666,27 +794,255 @@
       <div class="actions"><button class="btn primary" data-act="closeDialog">Done</button></div>`);
   }
 
-  // --- hiring reveal
-  let hires = [];
-  function showHires(res) {
-    hires = res;
-    openDialog(`<h3>Interview results</h3><div class="muted small">Tap a résumé to open it.</div>
-      <div class="resumes">${res.map((x, i) => {
-        const p = E.PEOPLE[x.id];
-        const line = x.kind === 'new' ? '<span class="good"><b>New hire!</b></span>' : x.kind === 'star' ? `<span>Promoted to ${'★'.repeat(x.stars)}</span>` : `<span class="muted">Signing bonus ${money(x.cash)}</span>`;
-        return `<button class="resume" data-act="flip" data-i="${i}"><div class="resume-inner"><div class="resume-face front"><b>Résumé</b><span class="muted">Candidate ${i + 1}</span></div>
-          <div class="resume-face back r${p.r}">${av(x.id)}<b>${esc(p.name)}</b>${band(p.r)}${line}</div></div></button>`;
-      }).join('')}</div>
-      <div class="actions"><button class="btn" data-act="flipAll">Open all</button><button class="btn primary" data-act="closeDialog">Done</button></div>`);
-    if (S.settings.stealth) $$('.resume').forEach(el => el.classList.add('flipped'));
+  // --- blind boxes
+  let boxes = [];
+  function showPack(kind, res) {
+    boxes = res.map(x => Object.assign({ opened: false }, x));
+    const pk = D.PACKS[kind];
+    openDialog(`<h3>${esc(pk.name)}</h3><div class="muted small">${res.length > 1 ? 'Tap a box to open it, or open them all.' : 'Tap the box to open it.'}</div>
+      <div class="boxes n${res.length}">${res.map((x, i) => boxHtml(kind, x, i)).join('')}</div>
+      <div class="box-sum small" id="boxSum"></div>
+      <div class="actions">${res.length > 1 ? '<button class="btn" data-act="openAll">Open all</button>' : ''}<button class="btn primary" data-act="closeDialog">Done</button></div>`, { cls: 'pack-dialog' });
+    if (S.settings.stealth) boxes.forEach((_, i) => openBox(i, true));
   }
-  function flip(i) {
-    const el = $(`.resume[data-i="${i}"]`);
-    if (!el || el.classList.contains('flipped')) return;
-    el.classList.add('flipped');
-    const p = E.PEOPLE[hires[i].id];
-    if (p.r >= 3) buzz([20, 40, 20, 40, 30]);
+  function boxHtml(kind, x, i) {
+    const p = E.PEOPLE[x.id];
+    const line = x.kind === 'new' ? `<span class="good"><b>${x.back ? 'Welcome back!' : 'New hire!'}</b></span>` : x.kind === 'star' ? `<span>Promoted to ${'★'.repeat(x.stars)}</span>` : `<span class="muted">Signing bonus ${money(x.cash)}</span>`;
+    return `<button class="bbox r${x.r}" data-act="openBox" data-i="${i}" aria-label="Open box ${i + 1}"><span class="bbox-box">${A.box(kind)}</span>
+      <span class="bbox-card r${p.r}">${p.r === 5 ? '<span class="burst"></span><span class="legend-tag">LEGEND</span>' : ''}${av(x.id, 'lg')}<b>${esc(p.name)}</b>${band(p.r)}${line}${p.ability && x.kind === 'new' ? `<span class="ab">⚡ ${esc(p.ability.name)}</span>` : ''}</span></button>`;
   }
+  function openBox(i, instant) {
+    const b = boxes[i];
+    const el = $(`.bbox[data-i="${i}"]`);
+    if (!b || b.opened || !el) return;
+    b.opened = true;
+    if (instant) { el.classList.add('open'); boxSummary(); return; }
+    el.classList.add('shake');
+    setTimeout(() => {
+      el.classList.add('open');
+      if (b.r >= 3) buzz(b.r === 5 ? [30, 60, 30, 60, 90] : [20, 40, 20]);
+      boxSummary();
+    }, b.r >= 4 ? 900 : 450);
+  }
+  function boxSummary() {
+    const el = $('#boxSum');
+    if (!el || boxes.length < 2 || boxes.some(b => !b.opened)) return;
+    const n = k => boxes.filter(k).length;
+    const parts = [[n(b => b.kind === 'new'), 'new hire'], [n(b => b.kind === 'star'), 'promotion'], [n(b => b.r === 5), 'Legend']].filter(([c]) => c);
+    el.textContent = parts.map(([c, w]) => `${c} ${w}${c > 1 ? 's' : ''}`).join(' · ');
+  }
+
+  // --- IPO and market-cap milestones
+  function showIPO(data) {
+    openDialog(`<div class="ipo"><div class="ipo-bell" id="bell">🔔</div><div class="muted small">Opening bell</div><h3>Atlas is a public company!</h3>
+      <div class="ticker big static"><b>ATLS</b> ${price(data.price)} <span class="gain">▲ 15.0%</span></div>
+      <p>From today every day is a fiscal quarter. Your daily commitment becomes the guidance you give Wall Street: beat it and ATLS pops, miss it and it drops. Keep growing and the market cap climbs. Forever.</p>
+      <div class="extras"><div class="extra gold">🎁<span>A <b>Legend</b> wants to join: open the Headhunter box in Hiring</span></div><div class="extra">📈<span><b>Investors</b> is open: share price, milestones and companies to buy</span></div></div>
+      <div class="actions"><button class="btn" data-act="ringBell">Ring the bell</button><button class="btn primary" data-act="nav" data-view="investors">See the stock</button></div></div>`, { cls: 'ipo-dialog', queue: true });
+  }
+  function showCap(data) {
+    openDialog(`<div class="profile-head">${av('ceo', 'xl')}<div><div class="muted small">Alex Rivera · CEO</div><h3>📈 ${esc(data.name || money(data.cap) + ' company')}!</h3></div></div>
+      <p>ATLS just passed a <b>${money(data.cap)}</b> market cap.</p>
+      <div class="extras"><div class="extra gold">📈<span>Brand value: revenue <b>+5%</b> for good</span></div><div class="extra gold">🎁<span>A headhunter found another <b>Legend</b>. Open the box in Hiring.</span></div></div>
+      <div class="actions"><button class="btn primary" data-act="closeDialog">Ring it in</button></div>`, { queue: true });
+  }
+
+  // --- breaks: daily word
+  let wInput = '', wReward = null;
+  function showWord() {
+    wInput = '';
+    openDialog(`<button class="dlg-x" data-act="closeDialog" aria-label="Close">×</button><h3>Daily word</h3><div class="muted small">Six tries. Green: right spot. Yellow: in the word, wrong spot. Same word as lintcheck in the terminal.</div>
+      <div class="wgrid" id="wgrid"></div><div class="wmsg small" id="wmsg"></div><div class="kbd" id="kbd"></div><div class="actions" id="wact"></div>`, { cls: 'game-dialog word' });
+    drawWord();
+  }
+  function drawWord(revealRow = -1) {
+    const ws = E.wordState(), ans = E.wordAnswer();
+    const rows = [];
+    for (let r = 0; r < 6; r++) {
+      const g = ws.guesses[r];
+      const res = g ? E.scoreGuess(g, ans) : null;
+      const letters = g || (r === ws.guesses.length && !ws.done ? wInput.padEnd(5) : '     ');
+      rows.push(`<div class="wrow">${[...letters].map((ch, i) => `<span class="tile ${res ? 's' + res[i] : ch.trim() ? 'typed' : ''} ${r === revealRow ? 'flip' : ''}" ${r === revealRow ? `style="animation-delay:${i * 0.13}s"` : ''}>${ch.trim().toUpperCase()}</span>`).join('')}</div>`);
+    }
+    $('#wgrid').innerHTML = rows.join('');
+    const best = {};
+    ws.guesses.forEach(g => E.scoreGuess(g, ans).forEach((v, i) => { best[g[i]] = Math.max(best[g[i]] === undefined ? -1 : best[g[i]], v); }));
+    $('#kbd').innerHTML = ws.done ? '' : ['qwertyuiop', 'asdfghjkl', '+zxcvbnm-'].map(row => `<div class="krow">${[...row].map(k => (k === '+' ? '<button class="key wide" data-act="wkey" data-k="enter">Enter</button>'
+      : k === '-' ? '<button class="key wide" data-act="wkey" data-k="back" aria-label="Delete">⌫</button>'
+        : `<button class="key ${best[k] === undefined ? '' : 's' + best[k]}" data-act="wkey" data-k="${k}">${k.toUpperCase()}</button>`)).join('')}</div>`).join('');
+    if (ws.done) {
+      const r = wReward;
+      $('#wmsg').innerHTML = ws.won
+        ? `<b class="good">Solved in ${ws.guesses.length}!</b> ${r ? `+${r.refs} referral${r.refs > 1 ? 's' : ''} and revenue +50% for ${r.boost} minutes.` : 'Come back tomorrow for a new word.'}`
+        : `The word was <b>${ans.toUpperCase()}</b>. ${r ? 'Here is a small consolation boost.' : 'New word tomorrow.'}`;
+      $('#wact').innerHTML = '<button class="btn" data-act="shareWord">Copy result</button><button class="btn primary" data-act="closeDialog">Done</button>';
+    }
+  }
+  function wordKey(k) {
+    const ws = E.wordState();
+    if (ws.done || !$('#wgrid')) return;
+    if (k === 'enter') {
+      if (wInput.length < 5) { $('#wmsg').textContent = 'Five letters, please'; return; }
+      const res = E.wordGuess(wInput);
+      if (res.error) { $('#wmsg').textContent = res.error; return; }
+      wInput = '';
+      if (res.reward) wReward = res.reward;
+      save();
+      drawWord(ws.guesses.length - 1);
+      buzz(res.won ? [20, 40, 20, 40, 60] : 8);
+      if (res.done) renderNav();
+      return;
+    }
+    if (k === 'back') wInput = wInput.slice(0, -1);
+    else if (/^[a-z]$/.test(k) && wInput.length < 5) wInput += k;
+    $('#wmsg').textContent = '';
+    drawWord();
+  }
+  function copyText(text, done) {
+    if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(text).then(() => toast(done), () => toast('Copy failed. Select the text instead.'));
+    else toast('Copying needs a secure (https) page');
+  }
+
+  // --- breaks: expense review
+  let exp = null;
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  function makeClaim() {
+    const kind = pick(['meal', 'meal', 'flight', 'hotel', 'software', 'office', 'personal']);
+    const c = { kind, title: pick(D.EXPENSES[kind]), who: pick(E.workers()), note: '', ok: true, why: '', cat: { meal: '🍽 Meal', flight: '✈️ Travel', hotel: '🏨 Hotel', software: '💻 Software', office: '📎 Office', personal: '🛍 Other' }[kind] };
+    if (kind === 'meal') { c.amount = rnd(8, 95); if (c.amount > 50) { c.ok = false; c.why = 'Meals: $50 or less'; } }
+    else if (kind === 'flight') { const cls = pick(['Economy', 'Economy', 'Economy', 'Business', 'First']); c.note = cls + ' class'; c.amount = cls === 'Economy' ? rnd(120, 650) : rnd(1500, 6000); if (cls !== 'Economy') { c.ok = false; c.why = 'Flights: economy only'; } }
+    else if (kind === 'hotel') c.amount = rnd(90, 420);
+    else if (kind === 'software') { const ticket = Math.random() < 0.55; c.note = ticket ? `Ticket IT-${Math.floor(rnd(1000, 9999))}` : 'No IT ticket'; c.amount = rnd(9, 300); if (!ticket) { c.ok = false; c.why = 'Software: needs an IT ticket'; } }
+    else if (kind === 'office') c.amount = rnd(4, 90);
+    else { c.amount = rnd(60, 1800); c.ok = false; c.why = 'Nothing personal'; }
+    if (c.ok && Math.random() < 0.15) { c.noReceipt = true; c.ok = false; c.why = 'Every claim needs a receipt'; }
+    return c;
+  }
+  function showExpense() {
+    if (exp && exp.timer) clearInterval(exp.timer);
+    exp = null;
+    const wait = E.gameReadyAt('expense') - now();
+    openDialog(`<button class="dlg-x" data-act="closeDialog" aria-label="Close">×</button><h3>Expense review</h3><div class="muted small">Approve or reject each claim against the policy. You have 30 seconds.${wait > 0 ? ` Practice round: the next reward is in ${fmtDur(wait / 1000)}.` : ''}</div>
+      <div class="policy">${D.EXPENSE_POLICY.map(r => `<span class="chip">${esc(r)}</span>`).join('')}</div>
+      <div class="exp-area" id="expArea"><div class="game-result"><button class="btn primary big" data-act="expStart">Start</button><div class="muted small">Keyboard: ← reject, → approve</div></div></div>`, { cls: 'game-dialog expense' });
+  }
+  function expStart() {
+    if (exp && exp.timer) clearInterval(exp.timer);
+    exp = { score: 0, right: 0, wrong: 0, end: now() + 30000, cur: makeClaim(), practice: now() < E.gameReadyAt('expense') };
+    $('#expArea').innerHTML = `<div class="exp-top"><div class="bar thin grow"><div class="fill" id="expBar" style="width:100%"></div></div><span>Score <b id="expScore">0</b></span></div>
+      <div id="claim"></div><div class="exp-flash" id="expFlash">&nbsp;</div>
+      <div class="exp-btns"><button class="btn big reject" data-act="exp" data-v="0">✕ Reject</button><button class="btn big approve" data-act="exp" data-v="1">✓ Approve</button></div>`;
+    drawClaim();
+    exp.timer = setInterval(() => {
+      const bar = $('#expBar');
+      if (!exp || !bar) { if (exp) clearInterval(exp.timer); exp = null; return; }
+      bar.style.width = clamp((exp.end - now()) / 300, 0, 100) + '%';
+      if (now() >= exp.end) expFinish();
+    }, 100);
+  }
+  function drawClaim() {
+    const c = exp.cur;
+    $('#claim').innerHTML = `<div class="receipt"><div class="r-head">${av(c.who, 'xs')}<span class="muted small">Claimed by ${esc(who(c.who).first)}</span></div>
+      <div class="r-title">${esc(c.title)}</div><div class="r-amount">$${c.amount.toFixed(2)}</div>
+      <div class="r-meta"><span class="chip">${c.cat}</span>${c.note ? `<span class="chip">${esc(c.note)}</span>` : ''}<span class="chip ${c.noReceipt ? 'warn' : ''}">${c.noReceipt ? '⚠️ No receipt' : '🧾 Receipt attached'}</span></div></div>`;
+  }
+  function expAnswer(approve) {
+    if (!exp || exp.done || !$('#claim')) return;
+    const c = exp.cur, right = approve === c.ok;
+    if (right) { exp.score++; exp.right++; } else { exp.score = Math.max(0, exp.score - 1); exp.wrong++; }
+    const f = $('#expFlash');
+    f.className = 'exp-flash ' + (right ? 'ok' : 'bad');
+    f.textContent = right ? '✓' : `✕ ${c.ok ? 'That one was within policy' : c.why}`;
+    $('#expScore').textContent = exp.score;
+    buzz(right ? 6 : [25, 30, 25]);
+    exp.cur = makeClaim();
+    drawClaim();
+  }
+  function expFinish() {
+    clearInterval(exp.timer);
+    exp.done = true;
+    const res = exp.practice ? null : E.claimGame('expense', exp.score);
+    save();
+    $('#expArea').innerHTML = `<div class="game-result"><div class="big-num">${exp.score}</div><div class="muted small">${exp.right} right · ${exp.wrong} wrong</div>
+      ${res && !res.cooldown ? `<div class="extra gold">☕<span>${res.shots ? `<b>+${res.shots} espresso shot${res.shots > 1 ? 's' : ''}</b>` : 'No shots this time: score 4 or more to earn one'}</span></div>` : '<div class="muted small">Practice round, no reward this time.</div>'}
+      <button class="btn" data-act="expStart">Play again</button></div>`;
+    renderNav();
+  }
+
+  // --- breaks: coffee-order memory
+  let mem = null;
+  const shuffled = a => { const r = a.slice(); for (let i = r.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [r[i], r[j]] = [r[j], r[i]]; } return r; };
+  function showMemory() {
+    const ids = shuffled(E.owned()).slice(0, 8);
+    const extra = ['dana', 'ceo', 'cfo', 'bot', ...D.RIVALS.map(r => 'rival:' + r.id)];
+    for (let k = 0; ids.length < 8; k++) ids.push(extra[k]);
+    const orders = shuffled(D.COFFEES);
+    const cards = shuffled(ids.flatMap((id, i) => [{ id, order: orders[i] }, { id, order: orders[i] }]));
+    mem = { cards, open: [], matched: new Set(), moves: 0, lock: false, practice: now() < E.gameReadyAt('memory') };
+    openDialog(`<button class="dlg-x" data-act="closeDialog" aria-label="Close">×</button><h3>Coffee orders</h3><div class="muted small">Flip two cards to find each person's order. Fewer moves, bigger boost.${mem.practice ? ` Practice round: the next reward is in ${fmtDur((E.gameReadyAt('memory') - now()) / 1000)}.` : ''}</div>
+      <div class="mem-top"><span>Moves <b id="memMoves">0</b></span><span class="muted small">8 is perfect</span></div>
+      <div class="mem-grid">${cards.map((c, i) => `<button class="mcard" data-act="mem" data-i="${i}" aria-label="Card ${i + 1}"><span class="mc-inner"><span class="mc-back">A</span><span class="mc-front">${av(c.id, 'sm')}<span>${esc(c.order)}</span></span></span></button>`).join('')}</div>
+      <div id="memEnd"></div>`, { cls: 'game-dialog memory' });
+  }
+  function memFlip(i) {
+    if (!mem || mem.lock || mem.matched.has(i) || mem.open.includes(i)) return;
+    const el = $(`.mcard[data-i="${i}"]`);
+    if (!el) return;
+    el.classList.add('up');
+    mem.open.push(i);
+    if (mem.open.length < 2) return;
+    mem.moves++;
+    $('#memMoves').textContent = mem.moves;
+    const [a, b] = mem.open;
+    if (mem.cards[a].id === mem.cards[b].id) {
+      mem.open = [];
+      for (const k of [a, b]) { mem.matched.add(k); $(`.mcard[data-i="${k}"]`).classList.add('matched'); }
+      buzz(10);
+      if (mem.matched.size === mem.cards.length) memFinish();
+    } else {
+      mem.lock = true;
+      setTimeout(() => {
+        for (const k of [a, b]) { const c = $(`.mcard[data-i="${k}"]`); if (c) c.classList.remove('up'); }
+        if (mem) { mem.open = []; mem.lock = false; }
+      }, 750);
+    }
+  }
+  function memFinish() {
+    const res = mem.practice ? null : E.claimGame('memory', mem.moves);
+    save();
+    $('#memEnd').innerHTML = `<div class="game-result"><b>All orders matched in ${mem.moves} moves!</b>
+      ${res && !res.cooldown ? `<div class="extra gold">📈<span>Revenue <b>+50% for ${res.boost} minutes</b></span></div>` : '<div class="muted small">Practice round, no reward this time.</div>'}
+      <button class="btn" data-act="game" data-g="memory">Play again</button></div>`;
+    renderNav();
+  }
+
+  // --- price chart hover (crosshair + tooltip), also driven by the arrow keys
+  let chartActive = false;
+  function chartHover(plot, clientX, idx) {
+    const pts = chartPoints();
+    const sc = A.chartScale(pts);
+    let i = idx;
+    if (i === undefined) {
+      const r = plot.getBoundingClientRect();
+      const t = sc.x0 + clamp((clientX - r.left) / r.width, 0, 1) * (sc.x1 - sc.x0);
+      i = 0;
+      for (let k = 1; k < pts.length; k++) if (Math.abs(pts[k][0] - t) < Math.abs(pts[i][0] - t)) i = k;
+    }
+    i = clamp(i, 0, pts.length - 1);
+    plot.dataset.i = i;
+    const [t, v] = pts[i];
+    const x = (100 * (t - sc.x0)) / (sc.x1 - sc.x0), y = 100 - (100 * (v - sc.y0)) / (sc.y1 - sc.y0);
+    const cross = plot.querySelector('.ch-cross'), dot = plot.querySelector('.ch-hdot'), tip = plot.querySelector('.ch-tip');
+    cross.style.left = dot.style.left = x + '%';
+    dot.style.top = y + '%';
+    const b = document.createElement('b'), sp = document.createElement('span');
+    b.textContent = price(v);
+    sp.textContent = timeLabel(t);
+    tip.replaceChildren(b, sp);
+    tip.style.left = clamp(x, 14, 86) + '%';
+    for (const el of [cross, dot, tip]) el.classList.remove('hidden');
+  }
+  function chartHide(plot) { for (const el of plot.querySelectorAll('.ch-cross,.ch-hdot,.ch-tip')) el.classList.add('hidden'); }
 
   // --- profile
   function showProfile(id, chat) {
@@ -707,6 +1063,7 @@
     openDialog(`<div class="profile-head">${av(id, 'xl')}<div class="grow"><h3>${esc(p.name)}</h3><div class="muted small">${esc(jobTitle(id))}</div>
         <div class="pc-row">${band(p.r)}${st.stars ? starsHtml(st.stars) : ''}<span class="status-tag ${s.cls}">${esc(s.text)}</span></div></div></div>
       <div class="quote">“${esc(p.catch)}” · ${esc(p.bio)}</div>
+      ${abilityHtml(p)}
       ${chat ? `<div class="said">${av(id)}<span>“${esc(chat.said)}”${chat.heartUp ? ' <b class="hearts">♥ Bond up</b>' : ''}</span></div>` : ''}
       ${msg ? `<div class="row"><button class="btn primary" data-act="nav" data-view="inbox">${esc(p.name.split(' ')[0])} has a message for you</button></div>` : ''}
       <div class="stat-grid">
@@ -717,10 +1074,10 @@
         <div class="stat"><label>Delivered</label><b>${st.delivered}</b></div>
         <div class="stat"><label>Avg rating</label><b>${st.delivered ? (st.starSum / st.delivered).toFixed(1) + '★' : '–'}</b></div>
       </div>
-      <div class="traits">${p.traits.map(t => `<div class="trait"><b>${esc(D.TRAITS[t].name)}</b>${esc(D.TRAITS[t].desc)}</div>`).join('')}</div>
+      ${p.traits.length ? `<div class="traits">${p.traits.map(t => `<div class="trait"><b>${esc(D.TRAITS[t].name)}</b>${esc(D.TRAITS[t].desc)}</div>`).join('')}</div>` : ''}
       ${E.unlocked('gear') ? `<div class="card-title" style="margin:12px 0 0">Equipment</div><div class="gear-row">${gear}</div>` : ''}
       <div class="card-title" style="margin:12px 0 0">Their story</div><ul class="story">${story}</ul>
-      <div class="actions"><button class="btn" data-act="closeDialog">Close</button><button class="btn primary" data-act="chat" data-id="${id}" ${chatReady ? '' : 'disabled'}>${chatReady ? '☕ Coffee chat' : `☕ Again in ${fmtDur((st.lastChat + 4 * 3600e3 - now()) / 1000)}`}</button></div>`);
+      <div class="actions"><button class="btn ghost danger letgo" data-act="letgo" data-id="${id}">Let go…</button><button class="btn" data-act="closeDialog">Close</button><button class="btn primary" data-act="chat" data-id="${id}" ${chatReady ? '' : 'disabled'}>${chatReady ? '☕ Coffee chat' : `☕ Again in ${fmtDur((st.lastChat + 4 * 3600e3 - now()) / 1000)}`}</button></div>`);
   }
 
   // ================================================================ coach marks (first session)
@@ -764,7 +1121,11 @@
       else if (type === 'built') toast(`🏗️ ${E.OFFICE[data.id].name} upgraded`);
       else if (type === 'achievement') toast(`🏅 Badge: ${data.name}`);
       else if (type === 'burnout') toast(`${who(data.id).first} is burnt out and taking a break`, data.id);
-      else if (type === 'funding') {
+      else if (type === 'ipo') showIPO(data);
+      else if (type === 'marketcap') {
+        if (data.legend) showCap(data);
+        else toast(`📈 ATLS passed a ${money(data.cap)} market cap`);
+      } else if (type === 'funding' && data.round < D.FUNDING.length - 1) {
         const r = D.FUNDING[data.round];
         const zones = Object.values(D.ZONES).filter(z => z.funding === data.round).map(z => z.name);
         openDialog(`<div class="profile-head">${av('ceo', 'xl')}<div><div class="muted small">Alex Rivera · CEO</div><h3>🎉 ${esc(r.name)}!</h3></div></div>
@@ -773,7 +1134,7 @@
           <div class="actions"><button class="btn primary" data-act="closeDialog">Let's go</button></div>`, { queue: true });
       } else if (type === 'message') {
         const m = data;
-        if (view !== 'inbox' && m.kind !== 'dana' && m.kind !== 'funding' && document.visibilityState === 'visible') toast(`${who(m.from).first}: ${m.text.length > 60 ? m.text.slice(0, 57) + '…' : m.text}`, m.from);
+        if (view !== 'inbox' && m.kind !== 'dana' && m.kind !== 'funding' && m.kind !== 'milestone' && document.visibilityState === 'visible') toast(`${who(m.from).first}: ${m.text.length > 60 ? m.text.slice(0, 57) + '…' : m.text}`, m.from);
       }
     }
   }
@@ -806,6 +1167,7 @@
     $('#bellCount').textContent = n;
     $('#bellCount').classList.toggle('hidden', !n);
     document.title = (S.settings.badge && n ? `(${n}) ` : '') + 'Atlas Workforce';
+    $('#tickChip').innerHTML = tickerChip();
     setAppBadge(S.settings.badge ? n : 0);
   }
 
@@ -871,7 +1233,8 @@
       const w = E.start(d.offer);
       if (!w) return toast('No free workstream or nobody available');
       save();
-      toast(`${w.offer.name} started · ${fmtDur(w.offer.dur)}`);
+      if (w.instant) toast(`⚡ ${who(w.team.find(id => E.PEOPLE[id].ability && E.PEOPLE[id].ability.id === 'warp')).first} delivered it the moment it started!`);
+      else toast(`${w.offer.name} started · ${fmtDur((w.end - w.start) / 1000)}`);
       renderNav();
       renderView(true);
     },
@@ -899,14 +1262,78 @@
       showProfile(d.id, { said: pick([p.catch, ...p.banter]), heartUp: res.hearts > before });
       buzz(15);
     },
-    interview: d => {
-      const res = E.interview(+d.n);
-      if (!res) return;
+    pack: d => {
+      const res = E.openPack(d.k);
+      if (!res) return toast(D.PACKS[d.k].ticket ? 'No Headhunter tickets' : 'Not enough referrals');
       save();
-      showHires(res);
+      showPack(d.k, res);
+      renderNav();
     },
-    flip: d => flip(+d.i),
-    flipAll: () => hires.forEach((_, i) => setTimeout(() => flip(i), S.settings.stealth ? 0 : i * 260)),
+    openBox: d => openBox(+d.i),
+    openAll: () => boxes.forEach((b, i) => setTimeout(() => openBox(i), S.settings.stealth ? 0 : i * 170)),
+    rush: d => {
+      const r = E.rush(+d.slot);
+      if (!r) return toast(S.shots < 1 ? `No espresso shots left. One arrives every ${D.BALANCE.shotMinutes} minutes.` : 'Nothing to rush');
+      save();
+      buzz(12);
+      toast(r.done ? '⚡ Rushed! Ready to sign off.' : '⚡ Rushed: half the time left');
+      renderNav();
+      renderView(true);
+    },
+    letgo: d => {
+      const id = d.id, p = E.PEOPLE[id];
+      const block = E.letGoBlock(id);
+      if (block) return toast(block);
+      const refs = E.severance(id);
+      const first = p.name.split(' ')[0];
+      confirmDialog(`Let ${first} go?`, `<div class="profile-head">${av(id, 'lg')}<div><b>${esc(p.name)}</b><div class="muted small">${esc(jobTitle(id))}</div></div></div>
+        <ul class="small"><li>${refs ? `<b>+${refs} referral${refs > 1 ? 's' : ''}</b> from ${p.noWork ? 'his' : 'their'} network` : 'No referrals: their network is still small'}</li><li>Everyone else's mood <b>−6</b></li>
+        ${S.stock ? '<li>ATLS <b>+2%</b>: investors love a "restructuring"</li>' : ''}<li>Their level, promotions and equipment go with them</li></ul>
+        <p class="muted small">People you let go sometimes start companies and send work your way. They might even apply again.</p>`, 'Let go', () => {
+        if (!E.letGo(id)) return;
+        save();
+        toast(`${first} has left Atlas`, id);
+        renderNav();
+        renderView(true);
+      });
+    },
+    game: d => {
+      closeSheet();
+      if (d.g === 'word') showWord();
+      else if (d.g === 'expense') showExpense();
+      else showMemory();
+    },
+    wkey: d => wordKey(d.k),
+    shareWord: () => {
+      const ws = E.wordState(), ans = E.wordAnswer();
+      const grid = ws.guesses.map(g => E.scoreGuess(g, ans).map(v => ['⬜', '🟨', '🟩'][v]).join('')).join('\n');
+      copyText(`Atlas daily word ${ws.day} ${ws.won ? ws.guesses.length : 'X'}/6\n${grid}`, 'Result copied');
+    },
+    expStart: () => expStart(),
+    exp: d => expAnswer(d.v === '1'),
+    mem: d => memFlip(+d.i),
+    ringBell: () => {
+      const b = $('#bell');
+      if (!b) return;
+      b.classList.remove('ring');
+      void b.offsetWidth;
+      b.classList.add('ring');
+      buzz([40, 60, 40, 60, 40]);
+    },
+    range: d => { chartRange = d.r; renderView(true); },
+    acquire: () => {
+      const tg = E.acqTarget();
+      confirmDialog(`Buy ${tg.name}?`, `<div class="profile-head"><span class="logo lg">${A.logo(tg.name)}</span><div><b>${esc(tg.name)}</b><div class="muted small">${esc(tg.sector)} · ${esc(tg.city)}</div></div></div>
+        <p class="small">Price: <b>${money(tg.price)}</b>. Their customers become yours: <b>revenue +15% for good</b>, and the market likes a deal.</p>`, 'Buy it', () => {
+        const r = E.acquire();
+        if (!r || r.error) return toast('Not enough budget');
+        save();
+        buzz([20, 40, 20]);
+        toast(`🤝 Atlas acquired ${r.name}`);
+        renderNav();
+        renderView(true);
+      });
+    },
     build: d => {
       if (!E.build(d.id)) return;
       save();
@@ -983,9 +1410,36 @@
     window.addEventListener('scroll', updateCoach, { passive: true });
     window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); installEvent = e; });
     window.addEventListener('appinstalled', () => { installEvent = null; S.settings.installHint = false; toast('Installed. Open Workforce from your home screen.'); });
+    document.addEventListener('pointermove', e => {
+      const plot = e.target.closest && e.target.closest('.ch-plot');
+      chartActive = !!plot;
+      if (plot) chartHover(plot, e.clientX);
+    });
+    document.addEventListener('pointerout', e => {
+      const plot = e.target.closest && e.target.closest('.ch-plot');
+      if (plot && !plot.contains(e.relatedTarget)) { chartActive = false; chartHide(plot); }
+    });
+    document.addEventListener('focusin', e => { if (e.target.classList && e.target.classList.contains('ch-plot')) chartHover(e.target, 0, chartPoints().length - 1); });
+    document.addEventListener('focusout', e => { if (e.target.classList && e.target.classList.contains('ch-plot')) chartHide(e.target); });
     document.addEventListener('keydown', e => {
+      const dlg = $('#dialog');
+      const open = !$('#overlay').classList.contains('hidden');
+      if (open && dlg.classList.contains('word') && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        const k = e.key === 'Enter' ? 'enter' : e.key === 'Backspace' ? 'back' : /^[a-zA-Z]$/.test(e.key) ? e.key.toLowerCase() : '';
+        if (k) { e.preventDefault(); wordKey(k); return; }
+      }
+      if (open && dlg.classList.contains('expense') && exp && !exp.done) {
+        if (e.key === 'ArrowLeft') { e.preventDefault(); expAnswer(false); return; }
+        if (e.key === 'ArrowRight') { e.preventDefault(); expAnswer(true); return; }
+      }
+      if (document.activeElement && document.activeElement.classList.contains('ch-plot') && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+        e.preventDefault();
+        const plot = document.activeElement;
+        chartHover(plot, 0, (+plot.dataset.i || 0) + (e.key === 'ArrowLeft' ? -1 : 1));
+        return;
+      }
       if (e.key === 'Escape' && !$('#sheet').classList.contains('hidden')) { closeSheet(); return; }
-      if (e.key === 'Escape' && !$('#overlay').classList.contains('hidden')) { closeDialog(); return; }
+      if (e.key === 'Escape' && open) { closeDialog(); return; }
       if ((e.key === 'Escape' || e.key === '`') && !/INPUT|TEXTAREA/.test(document.activeElement.tagName)) { e.preventDefault(); toggleDecoy(); return; }
       if (e.key === 'Enter' && document.activeElement && document.activeElement.id === 'nameInput') ACTIONS.saveName();
     });
@@ -1033,7 +1487,7 @@
 
     // Catch up on time away and summarise it.
     const away = (now() - S.lastSeen) / 1000;
-    const before = { office: JSON.stringify(S.office), inbox: S.inbox.length };
+    const before = { office: JSON.stringify(S.office), inbox: S.inbox.length, price: S.stock ? S.stock.price : 0, splits: S.stock ? S.stock.splits : 0 };
     E.tick();
     pendingEvents.length = 0;
     lastReady = lastReadyToast = E.ready().join(',');
@@ -1056,6 +1510,11 @@
       if (ready) lines.push(`✅ <b>${ready}</b> deliver${ready > 1 ? 'ies' : 'y'} waiting for your sign-off`);
       if (newMsgs > 0) lines.push(`💬 <b>${newMsgs}</b> new message${newMsgs > 1 ? 's' : ''}`);
       if (built) lines.push('🏗️ Office construction finished');
+      if (S.stock && before.price) {
+        const ch = (S.stock.price * Math.pow(10, S.stock.splits - before.splits)) / before.price - 1;
+        lines.push(`📈 ATLS ${pct(ch)} while you were away (now ${price(S.stock.price)})`);
+      }
+      if (S.tickets) lines.push(`🎁 A Legend is waiting in Hiring`);
       if (lines.length) {
         openDialog(`<h3>Welcome back${S.name ? ', ' + esc(S.name) : ''}!</h3><p class="muted small">You were away ${fmtDur(away)}.</p>
           <div class="extras">${lines.map(l => `<div class="extra"><span>${l}</span></div>`).join('')}</div>
@@ -1074,6 +1533,11 @@
           for (const r of s.risks) r.at -= ms;
           s.nextMsgAt -= ms;
           if (s.league) { s.league.start -= ms; s.league.end -= ms; }
+          s.boost.until -= ms;
+          s.games.expenseAt -= ms;
+          s.games.memoryAt -= ms;
+          for (const a of Object.values(s.alumni)) if (a.startup) a.startup -= ms;
+          if (s.stock) { s.stock.last -= ms; s.stock.fairAt -= ms; for (const h of s.stock.hist) h[0] -= ms; }
           tick();
         },
         give: (cash = 0, refs = 0) => { E.state.cash += cash; E.state.referrals += refs; },
