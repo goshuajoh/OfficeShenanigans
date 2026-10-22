@@ -1,979 +1,812 @@
-// Atlas Workforce — a long-haul idle RPG disguised as an HR system.
-//
-// Your squad auto-clears "projects" (stages of 10 blockers; every 5th ends in a timed launch boss).
-// Revenue levels people up; referrals recruit new ones (duplicates promote); engagements, R&D and
-// daily OKRs run on real-time timers; an IPO resets the run for shares that buy permanent perks.
+// Atlas Workforce UI. The rules live in engine.js; this file draws them and turns taps into engine calls.
 (() => {
   'use strict';
 
   const D = window.WF_DATA;
-  const SAVE_KEY = 'atlas_workforce_v1';
-  const GAME_ID = 'workforce';
-  const WAVES = 10;
-  const SPAWN_DELAY = 0.4;
-  const MAX_ITEMS = 60;
-  const LEVEL_GROWTH = 1.075;
-  const LEVEL_BASE = 4;
-  const PEOPLE = Object.fromEntries(D.PEOPLE.map(p => [p.id, p]));
-  const RESEARCH = Object.fromEntries(D.RESEARCH.map(r => [r.id, r]));
-  const PERKS = Object.fromEntries(D.PERKS.map(p => [p.id, p]));
-
+  const A = window.WF_ART;
+  const SAVE_KEY = 'atlas_workforce_v2';
+  const OLD_KEY = 'atlas_workforce_v1';
   const $ = s => document.querySelector(s);
+  const $$ = s => [...document.querySelectorAll(s)];
   const now = () => Date.now();
-  const rand = (a, b) => a + Math.random() * (b - a);
-  const pick = a => a[Math.floor(Math.random() * a.length)];
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  const dayKey = (d = new Date()) => `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+  const pick = a => a[Math.floor(Math.random() * a.length)];
 
-  const SUFFIX = ['', 'K', 'M', 'B', 'T', 'Qa', 'Qi', 'Sx', 'Sp', 'Oc', 'No', 'Dc', 'Ud', 'Dd', 'Td'];
+  const SUFFIX = ['', 'K', 'M', 'B', 'T', 'Qa', 'Qi', 'Sx', 'Sp', 'Oc', 'No', 'Dc'];
   function fmt(n) {
     if (!Number.isFinite(n)) return '∞';
-    if (n < 0) return '-' + fmt(-n);
-    if (n < 1000) return n < 10 && n % 1 ? n.toFixed(1) : Math.floor(n).toString();
-    const tier = Math.floor(Math.log10(n) / 3);
-    if (tier >= SUFFIX.length) return n.toExponential(2);
+    if (n < 1000) return n < 10 && n % 1 ? n.toFixed(1) : Math.round(n).toString();
+    const tier = Math.min(SUFFIX.length - 1, Math.floor(Math.log10(n) / 3));
     const v = n / Math.pow(1000, tier);
-    return (v < 10 ? v.toFixed(2) : v < 100 ? v.toFixed(1) : Math.floor(v)) + SUFFIX[tier];
+    return (v < 10 ? v.toFixed(2) : v < 100 ? v.toFixed(1) : Math.round(v)) + SUFFIX[tier];
   }
   const money = n => '$' + fmt(n);
   function fmtDur(sec) {
     sec = Math.max(0, Math.ceil(sec));
     if (sec < 60) return sec + 's';
-    if (sec < 3600) return Math.floor(sec / 60) + 'm' + (sec % 60 && sec < 600 ? ' ' + (sec % 60) + 's' : '');
-    const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60);
-    return h + 'h' + (m ? ' ' + m + 'm' : '');
+    if (sec < 3600) return Math.ceil(sec / 60) + ' min';
+    const h = Math.floor(sec / 3600), m = Math.round((sec % 3600) / 60);
+    return m ? `${h}h ${m}m` : `${h}h`;
+  }
+  function ago(t) {
+    const s = (now() - t) / 1000;
+    if (s < 60) return 'just now';
+    if (s < 3600) return Math.floor(s / 60) + 'm ago';
+    if (s < 86400) return Math.floor(s / 3600) + 'h ago';
+    return Math.floor(s / 86400) + 'd ago';
   }
 
-  // ================================================================ state
+  // ================================================================ engine & save
 
-  function fresh() {
-    return {
-      v: 1, name: '', created: now(), lastSeen: now(),
-      cash: 0, referrals: 0, patents: 0, shares: 0,
-      stage: 1, wave: 1, maxStage: 1, maxStageRun: 1, bossClearedRun: 0, farming: false, autoAdvance: true, blocker: null,
-      staff: { tyler: { lvl: 1, stars: 0 }, kai: { lvl: 1, stars: 0 } },
-      squad: ['tyler', 'kai'],
-      items: [], nextItem: 1,
-      missions: [], offers: [], offersAt: 0,
-      research: {}, lab: [],
-      perks: {}, ipos: 0,
-      okr: { day: '', list: [], counts: {}, bonus: false }, streak: 0, streakDay: '',
-      achievements: {}, unlocked: {}, seen: {},
-      stats: {
-        blockers: 0, bosses: 0, levels: 0, recruits: 0, engagements: 0, assists: 0, allhands: 0, gear: 0,
-        research: 0, panics: 0, pings: 0, longestAway: 0, revenue: 0, okrDays: 0, pizza: 0,
-      },
-      pity: 0, pityL: 0, lastPull: [],
-      allHandsUntil: 0, allHandsReady: 0, pizzaUntil: 0, pizzaReady: 0,
-      settings: { stealth: false, badge: true, autoLevel: true, autoEquip: true, autoRepeat: true, installHint: true },
-    };
-  }
+  const pendingEvents = [];
+  const E = window.WF_ENGINE.create(D, { emit: (type, data) => pendingEvents.push({ type, data }) });
+  let S = null;
 
-  function load() {
-    try {
-      const raw = localStorage.getItem(SAVE_KEY);
-      if (raw) return hydrate(JSON.parse(raw));
-    } catch { /* corrupted or blocked storage */ }
-    return fresh();
-  }
-  function hydrate(saved) {
-    const base = fresh();
-    const out = Object.assign(base, saved);
-    out.stats = Object.assign(fresh().stats, saved.stats || {});
-    out.settings = Object.assign(fresh().settings, saved.settings || {});
-    out.okr = Object.assign(fresh().okr, saved.okr || {});
-    return out;
+  function loadSave() {
+    let raw = null;
+    try { raw = localStorage.getItem(SAVE_KEY) || localStorage.getItem(OLD_KEY); } catch { /* storage blocked */ }
+    try { S = E.load(raw ? JSON.parse(raw) : null); } catch { S = E.fresh(); }
   }
   function save() {
-    S.lastSeen = now();
-    try { localStorage.setItem(SAVE_KEY, JSON.stringify(S)); } catch { /* storage blocked */ }
+    try { localStorage.setItem(SAVE_KEY, JSON.stringify(E.state)); } catch { /* storage blocked */ }
   }
 
-  let S = load();
-  let C = {}; // derived numbers, recomputed every tick
-  const feed = [];
+  // ================================================================ people
 
-  // ================================================================ formulas
-
-  const RES = id => S.research[id] || 0;
-  const PERK = id => S.perks[id] || 0;
-  const isUnlocked = f => S.maxStage >= D.UNLOCKS[f];
-  const hpAt = s => 8 * Math.pow(1.14, s - 1);
-  const cashAt = s => Math.pow(1.115, s - 1);
-  const isBossWave = (stage, wave) => stage % 5 === 0 && wave === WAVES;
-  const owned = () => Object.keys(S.staff);
-  const onMission = id => S.missions.some(m => m && m.staff.includes(id));
-  const labSlots = () => 1 + PERK('lab2');
-  const missionSlots = () => 2 + RES('slots');
-  const offlineCapH = () => 8 + 2 * RES('remote');
-
-  function squadSlots() {
-    let n = 2;
-    if (S.maxStage >= 3) n++;
-    if (S.maxStage >= 12) n++;
-    if (S.maxStage >= 30) n++;
-    return n + RES('squad') + PERK('seat');
-  }
-  function gearPct(id) {
-    let p = 0;
-    for (const i of S.items) if (i.owner === id) p += i.pct;
-    return p;
-  }
-  function rawOutput(id, lvl) {
-    const p = PEOPLE[id], st = S.staff[id];
-    const L = lvl === undefined ? st.lvl : lvl;
-    return D.RARITY[p.r].base * D.ROLES[p.role].mult * 4 * L * Math.pow(2, Math.floor(L / 25)) * (L >= 10 ? 2 : 1)
-      * Math.pow(1.5, st.stars) * (1 + gearPct(id) / 100);
-  }
-  const passiveOf = id => D.ROLES[PEOPLE[id].role].passive[PEOPLE[id].r] * (1 + 0.2 * S.staff[id].stars);
-  function levelCost(id, n = 1) {
-    const L = S.staff[id].lvl, g = LEVEL_GROWTH;
-    return LEVEL_BASE * (1 + 0.25 * PEOPLE[id].r) * Math.pow(g, L - 1) * (Math.pow(g, n) - 1) / (g - 1);
-  }
-  function maxLevels(id) {
-    const L = S.staff[id].lvl, g = LEVEL_GROWTH;
-    const first = LEVEL_BASE * (1 + 0.25 * PEOPLE[id].r) * Math.pow(g, L - 1);
-    return Math.max(0, Math.floor(Math.log(S.cash * (g - 1) / first + 1) / Math.log(g)));
-  }
-
-  function compute() {
-    const t = now();
-    const pas = { eng: 0, sre: 0, pm: 0, sales: 0, design: 0 };
-    let team = 0;
-    for (const id of S.squad) {
-      pas[PEOPLE[id].role] += passiveOf(id);
-      team += rawOutput(id);
+  function who(id) {
+    if (E.PEOPLE[id]) {
+      const p = E.PEOPLE[id];
+      return { name: p.name, first: p.name.split(' ')[0], title: S.staff[id] ? jobTitle(id) : D.RARITY[p.r].name, look: p.look, role: p.role };
     }
-    const gm = (1 + 0.02 * Object.keys(S.achievements).length) * (1 + 0.25 * RES('devprod')) * Math.pow(1.6, PERK('investor'));
-    const crit = 1 + 2 * Math.min(pas.eng, 100) / 100;
-    const dpsBase = team * (1 + pas.pm / 100) * crit * gm;
-    const dps = dpsBase * (t < S.allHandsUntil ? 2 : 1);
-    const cashBase = (1 + pas.sales / 100) * (1 + 0.25 * RES('revops')) * Math.pow(1.6, PERK('guidance'));
-    const kps = 1 / (hpAt(S.stage) / Math.max(dpsBase, 1e-9) + SPAWN_DELAY);
-    C = {
-      pas, gm, dps, dpsBase, cashBase,
-      cashMult: cashBase * (t < S.pizzaUntil ? 3 : 1),
-      bossMult: 1 + pas.sre / 100,
-      bossTime: 30 + 5 * RES('incident') + Math.round(pas.sre / 8),
-      drop: 0.03 * (1 + pas.design / 100) * (1 + 0.25 * RES('loot')),
-      luck: pas.design,
-      kps,
-      income: kps * cashAt(S.stage) * cashBase,
-    };
-  }
-  const memberOutput = id => rawOutput(id) * (1 + C.pas.pm / 100) * (1 + 2 * Math.min(C.pas.eng, 100) / 100) * C.gm;
-
-  // ================================================================ battle
-
-  const projectName = s => `${D.CLIENTS[(s * 7) % D.CLIENTS.length]} ${D.PROJECTS[(s * 3) % D.PROJECTS.length]}`;
-
-  function spawn() {
-    const boss = isBossWave(S.stage, S.wave);
-    const hp = hpAt(S.stage) * (boss ? 10 : 1);
-    compute();
-    S.blocker = {
-      name: boss ? D.BOSSES[(S.stage / 5 - 1) % D.BOSSES.length] : pick(D.BLOCKERS),
-      hp, max: hp, boss,
-      deadline: boss ? now() + C.bossTime * 1000 : 0,
-      spawnAt: now() + SPAWN_DELAY * 1000,
-    };
-  }
-
-  function damage(amount) {
-    const b = S.blocker;
-    if (now() < b.spawnAt) return;
-    b.hp -= amount * (b.boss ? C.bossMult : 1);
-    if (b.hp <= 0) kill();
-  }
-
-  function canBeatBoss() {
-    return C.dpsBase * C.bossMult * C.bossTime * 0.85 >= hpAt(S.stage) * 10;
-  }
-
-  function kill() {
-    const b = S.blocker;
-    earn(cashAt(S.stage) * (b.boss ? 10 : 1) * C.cashMult);
-    bump('blockers');
-    if (isUnlocked('assets') && (b.boss || Math.random() < C.drop)) addItem(rollItem(b.boss));
-
-    if (b.boss) {
-      bump('bosses');
-      S.farming = false;
-      if (S.stage > S.bossClearedRun) {
-        S.bossClearedRun = S.stage;
-        const refs = isUnlocked('recruit') ? 1 + PERK('headhunter') : 0;
-        const pats = isUnlocked('rnd') ? 1 : 0;
-        S.referrals += refs;
-        S.patents += pats;
-        log(`<b>${esc(b.name)}</b> shipped · project ${S.stage} complete${refs ? ` · +${refs} referral${refs > 1 ? 's' : ''}` : ''}${pats ? ' · +1 patent' : ''}`, 'good');
-      }
+    if (D.CAST[id]) return { name: D.CAST[id].name, first: D.CAST[id].name.split(' ')[0], title: D.CAST[id].title, look: D.CAST[id].look };
+    if (id && id.startsWith('rival:')) {
+      const r = D.RIVALS.find(x => x.id === id.slice(6));
+      if (r) return { name: r.name, first: r.name.split(' ')[0], title: `Manager · ${r.dept}`, look: r.look };
     }
-
-    if (S.wave < WAVES) {
-      S.wave++;
-      if (S.farming && isBossWave(S.stage, S.wave)) {
-        if (S.autoAdvance && canBeatBoss()) {
-          S.farming = false;
-          log(`Squad looks ready. Re-attempting <b>${esc(D.BOSSES[(S.stage / 5 - 1) % D.BOSSES.length])}</b>`);
-        } else {
-          S.wave = 1;
-        }
-      }
-    } else {
-      S.wave = 1;
-      if (S.autoAdvance) S.stage++;
-      S.maxStageRun = Math.max(S.maxStageRun, S.stage);
-      if (S.stage > S.maxStage) {
-        S.maxStage = S.stage;
-        checkUnlocks();
-      }
-    }
-    spawn();
+    return { name: 'Atlas', first: 'Atlas', title: '', look: D.CAST.bot.look };
   }
-
-  function failBoss() {
-    log(`Missed the deadline on <b>${esc(S.blocker.name)}</b>. Squad is regrouping on project ${S.stage}.`, 'bad');
-    S.farming = true;
-    S.wave = 1;
-    spawn();
+  function jobTitle(id) {
+    const p = E.PEOPLE[id], st = S.staff[id];
+    let suffix = '';
+    for (const [l, t] of D.TITLES) if (st && st.lvl >= l) suffix = t;
+    const base = p.r === 0 ? `${D.ROLES[p.role].name} Intern` : p.r === 1 ? D.ROLE_NOUN[p.role] : `${D.RARITY[p.r].name} ${D.ROLE_NOUN[p.role]}`;
+    return suffix ? `${base} ${suffix}` : base;
   }
-
-  function attemptLaunch() {
-    if (!S.farming) return;
-    S.farming = false;
-    S.wave = WAVES;
-    spawn();
-  }
-
-  function earn(x) {
-    S.cash += x;
-    S.stats.revenue += x;
-    S.okr.counts.revenue = (S.okr.counts.revenue || 0) + x;
-  }
-  function bump(stat, n = 1) {
-    S.stats[stat] = (S.stats[stat] || 0) + n;
-    S.okr.counts[stat] = (S.okr.counts[stat] || 0) + n;
-  }
-
-  // ================================================================ team
-
-  function levelUp(id, n) {
-    if (!S.staff[id]) return;
-    if (n === 'max') n = maxLevels(id);
-    if (n < 1) return;
-    const cost = levelCost(id, n);
-    if (cost > S.cash) return;
-    S.cash -= cost;
-    S.staff[id].lvl += n;
-    bump('levels', n);
-  }
-
-  // Greedy: always buy the level with the best output gain per dollar.
-  function levelSquadGreedy(maxSteps = 400) {
-    let bought = 0;
-    for (let k = 0; k < maxSteps; k++) {
-      let best = null, bestV = 0;
-      for (const id of S.squad) {
-        const c = levelCost(id);
-        if (c > S.cash) continue;
-        const L = S.staff[id].lvl;
-        const v = (rawOutput(id, L + 1) - rawOutput(id, L)) / c;
-        if (v > bestV) { bestV = v; best = id; }
-      }
-      if (!best) break;
-      S.cash -= levelCost(best);
-      S.staff[best].lvl++;
-      bought++;
-    }
-    if (bought) bump('levels', bought);
-    return bought;
-  }
-
-  function bestSquad() {
-    const avail = owned().filter(id => !onMission(id)).sort((a, b) => rawOutput(b) - rawOutput(a));
-    S.squad = avail.slice(0, squadSlots());
-  }
-
-  function toggleSquad(id) {
-    if (S.squad.includes(id)) {
-      if (S.squad.length <= 1) return toast('Your squad needs at least one person');
-      S.squad = S.squad.filter(x => x !== id);
-    } else {
-      if (onMission(id)) return toast(`${PEOPLE[id].name} is out on an engagement`);
-      if (S.squad.length >= squadSlots()) return toast('Squad is full. Remove someone first.');
-      S.squad.push(id);
-    }
-  }
-
-  // ================================================================ recruiting
-
-  function rollRarity() {
-    if (S.pityL >= 79) return 4;
-    const brand = RES('brand'), lucky = PERK('lucky');
-    const w = D.RARITY.map((r, i) => r.weight * (i >= 2 ? 1 + 0.15 * brand : 1) * (i === 4 ? Math.pow(1.5, lucky) : 1));
-    if (S.pity >= 24) { w[0] = 0; w[1] = 0; w[2] = 0; }
-    let roll = Math.random() * w.reduce((a, b) => a + b, 0);
-    for (let i = 0; i < w.length; i++) {
-      roll -= w[i];
-      if (roll <= 0) return i;
-    }
-    return 0;
-  }
-
-  function recruit(n) {
-    if (S.referrals < n) return toast('Not enough referrals');
-    S.referrals -= n;
-    const results = [];
-    for (let k = 0; k < n; k++) {
-      const r = rollRarity();
-      S.pity = r >= 3 ? 0 : S.pity + 1;
-      S.pityL = r === 4 ? 0 : S.pityL + 1;
-      const p = pick(D.PEOPLE.filter(x => x.r === r));
-      const st = S.staff[p.id];
-      if (!st) {
-        S.staff[p.id] = { lvl: 1, stars: 0 };
-        if (S.squad.length < squadSlots()) S.squad.push(p.id);
-        results.push({ id: p.id, kind: 'new' });
-        log(`Hired <b>${esc(p.name)}</b> · ${D.RARITY[r].name} ${D.ROLES[p.role].name}`, r >= 3 ? 'good' : '');
-      } else if (st.stars < 5) {
-        st.stars++;
-        results.push({ id: p.id, kind: 'star' });
-      } else {
-        S.patents += 1 + r;
-        results.push({ id: p.id, kind: 'max' });
-      }
-    }
-    S.lastPull = results;
-    bump('recruits', n);
-    if (results.some(x => PEOPLE[x.id].r === 4 && x.kind === 'new')) toast('🌟 A Principal accepted your offer!');
-    checkAchievements();
-  }
-
-  // ================================================================ assets
-
-  function rollItem(boss) {
-    const luck = C.luck + (boss ? 60 : 0);
-    const w = [60, 25, 10, 4, 1].map((v, i) => v * (1 + luck * i / 100));
-    let roll = Math.random() * w.reduce((a, b) => a + b, 0), r = 0;
-    for (; r < 4; r++) { roll -= w[r]; if (roll <= 0) break; }
-    const slot = pick(Object.keys(D.GEAR));
-    return { id: S.nextItem++, slot, r, lvl: S.stage, pct: Math.round(D.GEAR_PCT[r] * (1 + S.stage / 25)), owner: null };
-  }
-  const itemName = i => D.GEAR[i.slot].items[i.r];
-  const itemValue = i => cashAt(i.lvl) * 4 * (i.r + 1);
-
-  function addItem(item, quiet) {
-    S.items.push(item);
-    bump('gear');
-    if (!quiet && item.r >= 2) log(`Asset found: <b>${esc(itemName(item))}</b> (+${item.pct}%)`, item.r >= 3 ? 'good' : '');
-    if (S.items.length > MAX_ITEMS) {
-      const spare = S.items.filter(i => !i.owner).sort((a, b) => a.pct - b.pct)[0];
-      if (spare) recycle(spare.id, true);
-    }
-    if (RES('autoequip') && S.settings.autoEquip) equipBest();
-  }
-
-  function recycle(itemId, quiet) {
-    const i = S.items.find(x => x.id === itemId);
-    if (!i || i.owner) return;
-    S.items = S.items.filter(x => x !== i);
-    const v = itemValue(i) * C.cashBase;
-    earn(v);
-    if (!quiet) toast(`Recycled for ${money(v)}`);
-  }
-
-  function recycleAll() {
-    const spare = S.items.filter(i => !i.owner);
-    if (!spare.length) return toast('No unassigned assets');
-    let v = 0;
-    for (const i of spare) v += itemValue(i) * C.cashBase;
-    S.items = S.items.filter(i => i.owner);
-    earn(v);
-    toast(`Recycled ${spare.length} assets for ${money(v)}`);
-  }
-
-  // Best items go to the strongest people: squad first, then the bench.
-  function equipBest() {
-    const base = id => rawOutput(id) / (1 + gearPct(id) / 100);
-    const order = [
-      ...S.squad.slice().sort((a, b) => base(b) - base(a)),
-      ...owned().filter(id => !S.squad.includes(id)).sort((a, b) => base(b) - base(a)),
-    ];
-    for (const slot of Object.keys(D.GEAR)) {
-      const items = S.items.filter(i => i.slot === slot).sort((a, b) => b.pct - a.pct);
-      items.forEach((it, k) => { it.owner = order[k] || null; });
-    }
-  }
-
-  // ================================================================ engagements
-
-  function genOffer() {
-    const t = pick(D.ENGAGEMENTS);
-    const [dur, n] = pick(D.DURATIONS);
-    const avg = S.squad.reduce((a, id) => a + rawOutput(id), 0) / Math.max(1, S.squad.length);
-    return {
-      id: Math.random().toString(36).slice(2, 9),
-      name: `${t.name} · ${pick(D.CLIENTS)}`,
-      role: t.role, dur, n,
-      req: avg * 0.3 * n,
-      cash: C.income * dur * 0.35,
-      patents: dur / 900,
-      referrals: dur / 3600 * 0.6,
-      gear: Math.min(0.9, 0.2 + dur / 14400),
-    };
-  }
-  function ensureOffers() {
-    while (S.offers.length < 4) S.offers.push(genOffer());
-  }
-  function bench() {
-    return owned().filter(id => !S.squad.includes(id) && !onMission(id)).sort((a, b) => rawOutput(b) - rawOutput(a));
-  }
-  function freeMissionSlot() {
-    for (let i = 0; i < missionSlots(); i++) if (!S.missions[i]) return i;
-    return -1;
-  }
-
-  function startMission(offer, staffIds, slot, startAt = now()) {
-    const power = staffIds.reduce((a, id) => a + rawOutput(id), 0);
-    const roleMatch = staffIds.some(id => PEOPLE[id].role === offer.role);
-    const factor = clamp(power / Math.max(offer.req, 1e-9), 0.25, 1.5) * (roleMatch ? 1.25 : 1) * (1 + 0.2 * RES('training'));
-    S.missions[slot] = { offer, staff: staffIds, start: startAt, end: startAt + offer.dur * 1000, factor };
-  }
-
-  function startOffer(offerId) {
-    const offer = S.offers.find(o => o.id === offerId);
-    if (!offer) return;
-    const slot = freeMissionSlot();
-    if (slot < 0) return toast('All engagement slots are busy');
-    const avail = bench();
-    if (avail.length < offer.n) return toast(`Needs ${offer.n} people on the bench (not in your squad)`);
-    // Prefer someone with the matching role, then the strongest.
-    const match = avail.find(id => PEOPLE[id].role === offer.role);
-    const staff = match ? [match, ...avail.filter(id => id !== match)].slice(0, offer.n) : avail.slice(0, offer.n);
-    startMission(offer, staff, slot);
-    S.offers = S.offers.filter(o => o !== offer);
-    ensureOffers();
-    log(`Engagement started: <b>${esc(offer.name)}</b> (${fmtDur(offer.dur)})`);
-  }
-
-  function collectMission(slot, auto) {
-    const m = S.missions[slot];
-    if (!m || now() < m.end) return null;
-    const f = m.factor;
-    const cash = m.offer.cash * f;
-    const roll = x => Math.floor(x) + (Math.random() < x % 1 ? 1 : 0);
-    const pats = roll(m.offer.patents * f);
-    const refs = roll(m.offer.referrals * f);
-    earn(cash);
-    S.patents += pats;
-    S.referrals += refs;
-    let item = null;
-    if (isUnlocked('assets') && Math.random() < m.offer.gear) {
-      item = rollItem(m.offer.dur >= 7200);
-      addItem(item, true);
-    }
-    bump('engagements');
-    S.missions[slot] = null;
-    const summary = `${money(cash)}${pats ? ` · ${pats} patent${pats > 1 ? 's' : ''}` : ''}${refs ? ` · ${refs} referral${refs > 1 ? 's' : ''}` : ''}${item ? ` · ${itemName(item)}` : ''}`;
-    if (!auto) {
-      toast(`Engagement complete: ${summary}`);
-      log(`Collected <b>${esc(m.offer.name)}</b>: ${summary}`, 'good');
-    }
-    return { m, summary };
-  }
-
-  function processMissions() {
-    const auto = RES('repeat') && S.settings.autoRepeat;
-    for (let slot = 0; slot < S.missions.length; slot++) {
-      let guard = 0;
-      while (auto && S.missions[slot] && now() >= S.missions[slot].end && guard++ < 200) {
-        const prevEnd = S.missions[slot].end;
-        const res = collectMission(slot, true);
-        const prev = res.m;
-        if (guard === 1) log(`Auto-collected <b>${esc(prev.offer.name)}</b>: ${res.summary}`, 'good');
-        // Re-staff the same people on a fresh offer of the same length.
-        const offer = genOffer();
-        offer.dur = prev.offer.dur; offer.n = prev.offer.n; offer.name = prev.offer.name; offer.role = prev.offer.role;
-        offer.cash = C.income * offer.dur * 0.35; offer.patents = offer.dur / 900; offer.referrals = offer.dur / 3600 * 0.6;
-        offer.gear = Math.min(0.9, 0.2 + offer.dur / 14400);
-        const staffOk = prev.staff.every(id => S.staff[id] && !S.squad.includes(id) && !onMission(id));
-        if (!staffOk) break;
-        // Catch-up is limited to the offline accrual window, like everything else.
-        startMission(offer, prev.staff, slot, Math.max(Math.min(prevEnd, now()), now() - offlineCapH() * 3600 * 1000));
-      }
-    }
-  }
-
-  // ================================================================ R&D
-
-  function startResearch(id) {
-    const def = RESEARCH[id];
-    const lvl = RES(id);
-    if (lvl >= def.max) return;
-    if (S.lab.some(l => l.id === id)) return toast('Already in progress');
-    if (S.lab.length >= labSlots()) return toast('The lab is busy');
-    const cost = def.cost(lvl);
-    if (S.patents < cost) return toast('Not enough patents');
-    S.patents -= cost;
-    const dur = def.time(lvl);
-    S.lab.push({ id, start: now(), end: now() + dur * 1000 });
-    bump('research');
-    log(`Research started: <b>${esc(def.name)}</b> (${fmtDur(dur)})`);
-  }
-  function processLab() {
-    const done = S.lab.filter(l => now() >= l.end);
-    if (!done.length) return;
-    S.lab = S.lab.filter(l => now() < l.end);
-    for (const l of done) {
-      S.research[l.id] = RES(l.id) + 1;
-      toast(`Research complete: ${RESEARCH[l.id].name}`);
-      log(`Research complete: <b>${esc(RESEARCH[l.id].name)}</b> → level ${S.research[l.id]}`, 'good');
-      if (l.id === 'autoequip') equipBest();
-      if (l.id === 'squad') bestSquad();
-    }
-    checkAchievements();
-  }
-
-  // ================================================================ OKRs
-
-  const OKR_POOL = [
-    { id: 'blockers', text: n => `Clear ${fmt(n)} blockers`, target: () => 300 },
-    { id: 'levels', text: n => `Approve ${n} level-ups`, target: () => 75 },
-    { id: 'assists', text: n => `Assist your squad ${n} times`, target: () => 150 },
-    { id: 'allhands', text: n => `Run ${n} all-hands meetings`, target: () => 3 },
-    { id: 'revenue', text: n => `Book ${money(n)} in revenue`, target: () => Math.max(1000, C.income * 2400) },
-    { id: 'pings', text: n => `Reply to ${n} messages`, target: () => 3 },
-    { id: 'recruits', text: n => `Recruit ${n} candidates`, target: () => 3, req: 'recruit' },
-    { id: 'gear', text: n => `Find ${n} assets`, target: () => 8, req: 'assets' },
-    { id: 'engagements', text: n => `Complete ${n} engagements`, target: () => 3, req: 'engage' },
-    { id: 'research', text: n => `Start ${n} research projects`, target: () => 2, req: 'rnd' },
-    { id: 'pizza', text: n => `Order pizza ${n} times`, target: () => 2, req: 'pizza' },
-  ];
-  const OKR_BY_ID = Object.fromEntries(OKR_POOL.map(o => [o.id, o]));
-
-  function ensureOkrs() {
-    if (!isUnlocked('okr')) return;
-    const today = dayKey();
-    if (S.okr.day === today) return;
-    const pool = OKR_POOL.filter(o => !o.req || isUnlocked(o.req)).sort(() => Math.random() - 0.5).slice(0, 3);
-    S.okr = { day: today, list: pool.map(o => ({ id: o.id, target: Math.ceil(o.target()), claimed: false })), counts: {}, bonus: false };
-  }
-  const okrProgress = o => Math.min(o.target, S.okr.counts[o.id] || 0);
-  const okrClaimable = () => S.okr.list.filter(o => !o.claimed && okrProgress(o) >= o.target).length;
-
-  function claimOkr(i) {
-    const o = S.okr.list[i];
-    if (!o || o.claimed || okrProgress(o) < o.target) return;
-    o.claimed = true;
-    S.referrals += 3;
-    if (isUnlocked('rnd')) S.patents += 3;
-    toast(`OKR achieved: +3 referrals${isUnlocked('rnd') ? ', +3 patents' : ''}`);
-    if (!S.okr.bonus && S.okr.list.every(x => x.claimed)) {
-      S.okr.bonus = true;
-      const y = new Date(); y.setDate(y.getDate() - 1);
-      S.streak = S.streakDay === dayKey(y) ? S.streak + 1 : 1;
-      S.streakDay = dayKey();
-      S.stats.okrDays++;
-      const bonus = 5 + Math.min(S.streak, 7);
-      S.referrals += bonus;
-      toast(`All OKRs met! +${bonus} referrals (streak ${S.streak} day${S.streak > 1 ? 's' : ''})`);
-      log(`Quarter… er, day crushed. <b>${S.streak}-day streak</b>`, 'good');
-    }
-    checkAchievements();
-  }
-
-  // ================================================================ achievements & unlocks
-
-  const ACH = [];
-  const ach = (id, name, desc, test) => ACH.push({ id, name, desc, test });
-  [10, 25, 50, 75, 100, 150, 200, 300, 500].forEach(n => ach('stage' + n, `Project ${n}`, `Reach project ${n}`, s => s.maxStage >= n));
-  [1, 10, 50, 200].forEach(n => ach('boss' + n, n === 1 ? 'Shipped It' : `${n} Launches`, `Ship ${n} launch${n > 1 ? 'es' : ''}`, s => s.stats.bosses >= n));
-  [1e3, 1e4, 1e5].forEach(n => ach('blk' + n, `${fmt(n)} Blockers`, `Clear ${fmt(n)} blockers`, s => s.stats.blockers >= n));
-  [10, 50, 150].forEach(n => ach('rec' + n, `${n} Interviews`, `Recruit ${n} candidates`, s => s.stats.recruits >= n));
-  [10, 15, 20, 25].forEach(n => ach('own' + n, n === 25 ? 'Full Org Chart' : `Team of ${n}`, n === 25 ? 'Hire every character' : `Have ${n} different people`, s => Object.keys(s.staff).length >= n));
-  ach('principal', 'Principal Hire', 'Hire a Principal', s => Object.keys(s.staff).some(id => PEOPLE[id].r === 4));
-  ach('star5', 'Fully Promoted', 'Promote someone to 5★', s => Object.values(s.staff).some(x => x.stars >= 5));
-  [100, 250, 500, 1000].forEach(n => ach('lvl' + n, `Level ${n}`, `Get someone to level ${n}`, s => Object.values(s.staff).some(x => x.lvl >= n)));
-  [1, 25, 100, 500].forEach(n => ach('eng' + n, n === 1 ? 'Billable' : `${n} Engagements`, `Complete ${n} engagement${n > 1 ? 's' : ''}`, s => s.stats.engagements >= n));
-  [10, 50, 150].forEach(n => ach('res' + n, `${n} Research Levels`, `Complete ${n} research levels`, s => Object.values(s.research).reduce((a, b) => a + b, 0) >= n));
-  [1, 5, 15].forEach(n => ach('ipo' + n, n === 1 ? 'Ring the Bell' : `${n} IPOs`, `Take the company public ${n === 1 ? '' : n + ' times'}`.trim(), s => s.ipos >= n));
-  ach('okr1', 'Objectives Met', 'Complete all daily OKRs', s => s.stats.okrDays >= 1);
-  ach('streak7', 'Consistent Performer', 'Reach a 7-day OKR streak', s => s.streak >= 7);
-  ach('legend', 'R&D Prototype', 'Equip a top-tier asset', s => s.items.some(i => i.r === 4 && i.owner));
-  ach('panic', 'Nothing to See Here', 'Use the report view', s => s.stats.panics >= 1);
-  ach('away8', 'Out of Office', 'Be away for 8 hours', s => s.stats.longestAway >= 8 * 3600);
-  ach('assist1k', 'Hands-on Manager', 'Assist 1,000 times', s => s.stats.assists >= 1000);
-  ach('ping25', 'Always Online', 'Reply to 25 messages', s => s.stats.pings >= 25);
-  ach('rich', 'Unicorn', 'Earn $1T lifetime revenue', s => s.stats.revenue >= 1e12);
-
-  function checkAchievements() {
-    for (const a of ACH) {
-      if (!S.achievements[a.id] && a.test(S)) {
-        S.achievements[a.id] = now();
-        S.referrals += 2;
-        toast(`🏅 Badge earned: ${a.name} (+2 referrals)`);
-        log(`Badge earned: <b>${esc(a.name)}</b>`, 'good');
-      }
-    }
-  }
-
-  const UNLOCK_TEXT = {
-    recruit: ['Talent pipeline', 'Spend referrals to recruit. Here are 5 to start.'],
-    assets: ['IT assets', 'Blockers now drop equipment that boosts whoever uses it.'],
-    pizza: ['Pizza Friday', 'Triple revenue for a minute. Find it on the Overview.'],
-    engage: ['Client engagements', 'Send people from your bench on timed jobs for patents, referrals and cash.'],
-    rnd: ['R&D', 'Spend patents on permanent upgrades and automation. Here are 5 patents.'],
-    okr: ['Daily OKRs', 'Three goals a day. Hit them all to build a streak.'],
-    board: ['Board & IPO', 'Take the company public: reset your run for shares that buy permanent perks.'],
-  };
-  function checkUnlocks(quiet) {
-    for (const f of Object.keys(D.UNLOCKS)) {
-      if (!S.unlocked[f] && isUnlocked(f)) {
-        S.unlocked[f] = true;
-        if (f === 'recruit') S.referrals += 5;
-        if (f === 'rnd') S.patents += 5;
-        if (f === 'engage') { compute(); ensureOffers(); }
-        if (f === 'okr') { compute(); ensureOkrs(); }
-        if (!quiet) {
-          const [name, text] = UNLOCK_TEXT[f];
-          toast(`Unlocked: ${name}. ${text}`);
-          log(`New: <b>${name}</b>. ${text}`, 'good');
-        }
-      }
-    }
-    checkAchievements();
-  }
-
-  // ================================================================ IPO
-
-  const sharesOnIpo = () => S.maxStageRun >= D.UNLOCKS.board ? Math.floor(Math.pow((S.maxStageRun - 50) / 5, 1.7)) : 0;
-
-  function ipo() {
-    const gain = sharesOnIpo();
-    if (gain < 1) return;
-    modal('Take the company public?',
-      `<p>You'll receive <b>${gain} shares</b> to spend on permanent board perks.</p>
-       <p><b>Resets:</b> revenue, project progress and employee levels${PERK('retention') ? ` (you keep ${PERK('retention') * 10}%)` : ''}.<br>
-       <b>Keeps:</b> people and promotions, assets, research, perks, badges, referrals and patents.</p>`,
-      () => {
-        S.shares += gain;
-        S.ipos++;
-        const keep = 0.1 * PERK('retention');
-        for (const st of Object.values(S.staff)) st.lvl = Math.max(1, Math.floor(st.lvl * keep));
-        Object.assign(S, { cash: 0, stage: 1, wave: 1, maxStageRun: 1, bossClearedRun: 0, farming: false });
-        spawn();
-        log(`🔔 IPO #${S.ipos} complete: <b>+${gain} shares</b>`, 'good');
-        checkAchievements();
-        save();
-        go('board');
-      }, true);
-  }
-
-  function buyPerk(id) {
-    const def = PERKS[id], lvl = PERK(id);
-    if (lvl >= def.max) return;
-    const cost = def.cost(lvl);
-    if (S.shares < cost) return toast('Not enough shares');
-    S.shares -= cost;
-    S.perks[id] = lvl + 1;
-    if (id === 'seat') bestSquad();
-    toast(`${def.name} → level ${lvl + 1}`);
-  }
-
-  // ================================================================ buffs & pings
-
-  function assist(ev) {
-    const amount = Math.max(1, C.dpsBase * 0.08);
-    damage(amount);
-    bump('assists');
-    const card = $('#pjCard');
-    if (card && !S.settings.stealth) {
-      const r = card.getBoundingClientRect();
-      const x = ev && ev.clientX ? ev.clientX - r.left : r.width / 2 + rand(-60, 60);
-      const y = ev && ev.clientY ? ev.clientY - r.top - 24 : r.height - 70;
-      const el = document.createElement('div');
-      el.className = 'floater';
-      el.textContent = '-' + fmt(amount);
-      el.style.left = x + 'px';
-      el.style.top = y + 'px';
-      $('#floaters').appendChild(el);
-      setTimeout(() => el.remove(), 900);
-    }
-  }
-  function allHands() {
-    if (now() < S.allHandsReady) return;
-    S.allHandsUntil = now() + 30000;
-    S.allHandsReady = now() + 300000;
-    bump('allhands');
-    log('All-hands called: team output ×2 for 30s');
-  }
-  function pizza() {
-    if (!isUnlocked('pizza') || now() < S.pizzaReady) return;
-    S.pizzaUntil = now() + 60000;
-    S.pizzaReady = now() + 900000;
-    bump('pizza');
-    log('🍕 Pizza Friday: revenue ×3 for 60s');
-  }
-
-  let pingAt = now() + rand(60, 150) * 1000, pingReward = null, pingTimer = null;
-  function maybePing() {
-    if (now() < pingAt || pingReward || !$('#decoy').classList.contains('hidden')) return;
-    const [from, msg] = pick(D.PINGS);
-    $('#pingFrom').textContent = from;
-    $('#pingMsg').textContent = msg;
-    $('#ping').classList.remove('hidden');
-    const opts = ['cash', 'cash', 'allhands'];
-    if (isUnlocked('recruit')) opts.push('referral');
-    if (isUnlocked('rnd')) opts.push('patents');
-    pingReward = pick(opts);
-    pingTimer = setTimeout(hidePing, 10000);
-  }
-  function hidePing() {
-    $('#ping').classList.add('hidden');
-    pingReward = null;
-    clearTimeout(pingTimer);
-    pingAt = now() + rand(120, 300) * 1000;
-  }
-  function answerPing() {
-    const r = pingReward;
-    if (!r) return;
-    hidePing();
-    bump('pings');
-    if (r === 'cash') {
-      const v = Math.max(C.income * 120, 20);
-      earn(v);
-      toast(`Spot bonus: +${money(v)}`);
-    } else if (r === 'allhands') {
-      S.allHandsUntil = now() + 30000;
-      toast('Shout-out from the CEO: team output ×2 for 30s');
-    } else if (r === 'referral') {
-      S.referrals += 1;
-      toast('Someone wants to work here: +1 referral');
-    } else {
-      S.patents += 2;
-      toast('Legal filed your idea: +2 patents');
-    }
-    checkAchievements();
-  }
-
-  // ================================================================ offline
-
-  function offlineGain(sec, show) {
-    const cap = offlineCapH() * 3600;
-    const t = Math.min(sec, cap);
-    S.stats.longestAway = Math.max(S.stats.longestAway, sec);
-    compute();
-    const eff = 0.5 + 0.1 * PERK('parachute');
-    const kills = Math.floor(C.kps * t * eff);
-    let cash = 0, drops = 0;
-    if (kills > 0) {
-      cash = kills * cashAt(S.stage) * C.cashBase;
-      earn(cash);
-      bump('blockers', kills);
-      if (isUnlocked('assets')) {
-        drops = Math.min(12, Math.floor(kills * C.drop));
-        for (let i = 0; i < drops; i++) addItem(rollItem(false), true);
-      }
-    }
-    if (S.blocker && S.blocker.boss) S.blocker.deadline = now() + C.bossTime * 1000;
-    const before = S.stats.engagements;
-    processMissions();
-    processLab();
-    const autoMissions = S.stats.engagements - before;
-    if (RES('autolevel') && S.settings.autoLevel) levelSquadGreedy(2000);
-    checkAchievements();
-    if (show && (kills > 0 || autoMissions)) {
-      modal('While you were in meetings…',
-        `<p>You were away for <b>${fmtDur(sec)}</b>${sec > cap ? ` (accrual capped at ${offlineCapH()}h)` : ''}. Your squad kept working:</p>
-         <ul><li><b>${fmt(kills)}</b> blockers cleared</li><li><b>${money(cash)}</b> revenue</li>
-         ${drops ? `<li><b>${drops}</b> assets found</li>` : ''}${autoMissions ? `<li><b>${autoMissions}</b> engagements auto-completed</li>` : ''}</ul>
-         <p class="muted small">Offline efficiency ${Math.round(eff * 100)}%.</p>`);
-    }
-  }
-
-  // ================================================================ UI: chrome
-
-  const toastQueue = [];
-  function toast(msg) {
-    const box = $('#toasts');
-    const el = document.createElement('div');
-    el.className = 'toast';
-    el.textContent = msg;
-    box.appendChild(el);
-    toastQueue.push(el);
-    while (toastQueue.length > (compact() ? 2 : 3)) toastQueue.shift().remove();
-    setTimeout(() => { el.remove(); const i = toastQueue.indexOf(el); if (i >= 0) toastQueue.splice(i, 1); }, 2500 + msg.length * 40);
-  }
-
-  let modalCb = null;
-  function modal(title, body, onOk, cancel) {
-    $('#modalTitle').textContent = title;
-    $('#modalBody').innerHTML = body;
-    $('#modalCancel').classList.toggle('hidden', !cancel);
-    modalCb = onOk || null;
-    $('#modal').classList.remove('hidden');
-  }
-  function closeModal(ok) {
-    $('#modal').classList.add('hidden');
-    const cb = modalCb;
-    modalCb = null;
-    if (ok && cb) cb();
-    renderView(true);
-  }
-
-  function log(html, cls = '') {
-    const d = new Date();
-    feed.unshift({ t: `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`, html, cls });
-    if (feed.length > 60) feed.pop();
-    const el = $('#feed');
-    if (el) el.innerHTML = feedHtml();
-  }
-  const feedHtml = () => feed.map(f => `<li class="${f.cls}"><span class="t">${f.t}</span><span>${f.html}</span></li>`).join('');
-
-  const initials = name => name.replace(/[^A-Za-z ]/g, '').split(' ').filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase() || name.slice(0, 2).toUpperCase();
-  const avatar = (id, locked) => `<span class="avatar ${locked ? 'locked' : PEOPLE[id].role}">${initials(PEOPLE[id].name)}</span>`;
-  const band = r => `<span class="lvl r${r}">${D.RARITY[r].key} ${D.RARITY[r].name}</span>`;
+  const av = (id, cls = '') => `<span class="av ${cls}">${A.avatar(who(id).look)}</span>`;
+  const stack = (ids, cls = 'xs') => `<span class="stack">${ids.map(id => av(id, cls)).join('')}</span>`;
+  const band = r => `<span class="band r${r}">${D.RARITY[r].key} ${D.RARITY[r].name}</span>`;
   const starsHtml = n => `<span class="stars">${'★'.repeat(n)}${'☆'.repeat(5 - n)}</span>`;
-
-  function actionable() {
-    const out = [];
-    if (isUnlocked('engage')) {
-      const ready = S.missions.filter(m => m && now() >= m.end).length;
-      if (ready) out.push({ text: `${ready} engagement${ready > 1 ? 's' : ''} ready to collect`, view: 'engage', count: true });
-      const free = Array.from({ length: missionSlots() }, (_, i) => !S.missions[i]).filter(Boolean).length;
-      if (free && bench().length && S.offers.some(o => o.n <= bench().length)) out.push({ text: `${free} engagement slot${free > 1 ? 's' : ''} free`, view: 'engage', count: true });
-    }
-    if (isUnlocked('rnd') && S.lab.length < labSlots() && D.RESEARCH.some(r => RES(r.id) < r.max && r.cost(RES(r.id)) <= S.patents && !S.lab.some(l => l.id === r.id))) {
-      out.push({ text: 'R&D lab is idle', view: 'rnd', count: true });
-    }
-    if (isUnlocked('okr') && okrClaimable()) out.push({ text: `${okrClaimable()} OKR${okrClaimable() > 1 ? 's' : ''} ready to claim`, view: 'okr', count: true });
-    if (isUnlocked('recruit') && S.referrals >= 1) out.push({ text: `${S.referrals} referral${S.referrals > 1 ? 's' : ''} to spend`, view: 'recruit', count: S.referrals >= 10 });
-    if (isUnlocked('board') && sharesOnIpo() >= Math.max(1, S.shares + Object.keys(S.perks).length)) out.push({ text: `IPO available: +${sharesOnIpo()} shares`, view: 'board', count: true });
-    const perk = D.PERKS.find(p => PERK(p.id) < p.max && p.cost(PERK(p.id)) <= S.shares);
-    if (perk) out.push({ text: 'Unspent shares: buy a board perk', view: 'board', count: true });
-    if (!(RES('autolevel') && S.settings.autoLevel) && S.squad.some(id => levelCost(id) <= S.cash)) out.push({ text: 'Level-ups affordable', view: 'team', count: false });
-    if (S.farming) out.push({ text: `Launch on project ${S.stage} is blocked. Strengthen your squad.`, view: 'team', count: false });
-    return out;
+  const heartsHtml = id => { const h = E.hearts(id); return `<span class="hearts">${'♥'.repeat(h)}<span class="off">${'♥'.repeat(5 - h)}</span></span>`; };
+  const roleChip = r => `<span class="chip role" style="color:${D.ROLES[r].color}">${A.roleIcon(r)}${D.ROLES[r].short}</span>`;
+  const moodWord = m => (m >= 80 ? 'Thriving' : m >= 60 ? 'Happy' : m >= 40 ? 'Okay' : m >= 25 ? 'Stressed' : 'Burnt out');
+  function statusOf(id) {
+    const t = now();
+    if (E.resting(id)) return { cls: 'rest', text: `Recharging · ${fmtDur((S.staff[id].restUntil - t) / 1000)}` };
+    const w = S.ws.find(x => x && x.team.includes(id));
+    if (w) return { cls: 'busy', text: t >= w.end ? `Done: ${w.offer.name}` : `On ${w.offer.name}` };
+    return { cls: '', text: 'Available' };
   }
+  const sizeLabel = o => `${D.SIZES[o.size].name} · ${fmtDur(o.dur)}`;
 
-  // ================================================================ UI: navigation
+  // ================================================================ navigation
 
-  const NAV = [
-    ['WORKSPACE', [['overview', 'Overview'], ['team', 'Team'], ['recruit', 'Talent pipeline', 'recruit'], ['assets', 'IT assets', 'assets']]],
-    ['OPERATIONS', [['engage', 'Client engagements', 'engage'], ['rnd', 'R&D', 'rnd'], ['okr', 'OKRs & badges']]],
-    ['COMPANY', [['board', 'Board & IPO', 'board'], ['rank', 'Rankings'], ['settings', 'Settings']]],
-  ];
-  const VIEW_LABEL = Object.fromEntries(NAV.flatMap(([, items]) => items.map(([v, label]) => [v, label])));
-  // Phones get a bottom tab bar; everything else lives behind "More".
-  const TABS = [['overview', 'Home'], ['team', 'Team'], ['recruit', 'Hire', 'recruit'], ['engage', 'Clients', 'engage']];
-  const MORE = [['assets', 'assets'], ['rnd', 'rnd'], ['okr'], ['board', 'board'], ['rank'], ['settings']];
   const ICON = {
-    overview: '<path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>',
+    home: '<path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>',
+    projects: '<rect x="3" y="7" width="18" height="13" rx="2"/><path d="M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M3 13h18"/>',
+    inbox: '<path d="M4 5h16v11H9l-5 4z"/><path d="M8 9.5h8M8 12.5h5"/>',
     team: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.6 3.4-5.5 6.5-5.5s5.7 1.9 6.5 5.5"/><circle cx="17" cy="9" r="2.5"/><path d="M16.5 14.6c2.6.3 4.4 2 5 4.9"/>',
-    recruit: '<circle cx="10" cy="8" r="3.5"/><path d="M3.5 20c.8-3.6 3.4-5.5 6.5-5.5s5.7 1.9 6.5 5.5"/><path d="M19 7.5v6M16 10.5h6"/>',
-    engage: '<rect x="3" y="7" width="18" height="13" rx="2"/><path d="M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M3 13h18"/>',
-    more: '<circle cx="5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="19" cy="12" r="1.3"/>',
-    assets: '<rect x="4" y="5" width="16" height="11" rx="1.5"/><path d="M2 19h20"/>',
-    rnd: '<path d="M9 3h6M10 3v6l-5.5 9.5A1.5 1.5 0 0 0 5.8 21h12.4a1.5 1.5 0 0 0 1.3-2.5L14 9V3M7.2 15.5h9.6"/>',
-    okr: '<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1"/>',
-    board: '<path d="M4 20h16M7 17v-6M12 17V7M17 17v-9"/>',
-    rank: '<path d="M8 4h8v5a4 4 0 0 1-8 0zM8 6H5a3 3 0 0 0 3 4M16 6h3a3 3 0 0 1-3 4M12 13v4M8 20h8"/>',
+    hiring: '<circle cx="10" cy="8" r="3.5"/><path d="M3.5 20c.8-3.6 3.4-5.5 6.5-5.5s5.7 1.9 6.5 5.5"/><path d="M19 7.5v6M16 10.5h6"/>',
+    office: '<path d="M4 21V5l8-2v18M12 8h8v13M2 21h20M7 8h2M7 12h2M7 16h2M15 12h2M15 16h2"/>',
+    league: '<path d="M8 4h8v5a4 4 0 0 1-8 0zM8 6H5a3 3 0 0 0 3 4M16 6h3a3 3 0 0 1-3 4M12 13v4M8 20h8"/>',
+    career: '<path d="M4 20h16M7 17v-5M12 17V8M17 17V5"/>',
     settings: '<circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/>',
+    more: '<circle cx="5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="19" cy="12" r="1.3"/>',
     report: '<path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5M9 13h7M9 17h7"/>',
     install: '<rect x="7" y="2.5" width="10" height="19" rx="2"/><path d="M12 7v7M9 11l3 3 3-3"/>',
   };
   const icon = k => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON[k]}</svg>`;
+  const NAV = [
+    ['WORK', [['home', 'Home'], ['projects', 'Projects'], ['inbox', 'Inbox']]],
+    ['PEOPLE', [['team', 'Team'], ['hiring', 'Hiring', 'hiring']]],
+    ['COMPANY', [['office', 'Office'], ['league', 'League', 'league'], ['career', 'Career']]],
+    ['', [['settings', 'Settings']]],
+  ];
+  const LABEL = Object.fromEntries(NAV.flatMap(([, items]) => items.map(([v, l]) => [v, l])));
+  const GATE = Object.fromEntries(NAV.flatMap(([, items]) => items.filter(x => x[2]).map(([v, , g]) => [v, g])));
+  const TABS = ['home', 'projects', 'inbox', 'team'];
+  const MORE = ['hiring', 'office', 'league', 'career', 'settings'];
   const phoneQuery = window.matchMedia('(max-width: 700px)');
   const compact = () => phoneQuery.matches;
-  let view = 'overview';
+  let view = 'home';
 
+  const gateLevel = g => (D.UNLOCKS.find(u => u.id === g) || {}).career;
+  const isLocked = v => GATE[v] && !E.unlocked(GATE[v]);
+  const pendingCount = () => S.inbox.filter(m => m.choices && !m.done).length;
   function navBadge(v) {
-    if (v === 'engage') return S.missions.filter(m => m && now() >= m.end).length;
-    if (v === 'okr') return isUnlocked('okr') ? okrClaimable() : 0;
-    if (v === 'recruit') return S.referrals;
-    if (v === 'rnd') return S.lab.filter(l => now() >= l.end).length;
+    if (v === 'inbox') return pendingCount();
+    if (v === 'projects') return E.ready().length;
+    if (v === 'hiring') return S.referrals >= 1 ? S.referrals : 0;
     return 0;
   }
-  function renderNav() {
-    $('#nav').innerHTML = NAV.map(([sec, items]) => `<div class="nav-section">${sec}</div>` + items.map(([v, label, gate]) => {
-      if (gate && !isUnlocked(gate)) return `<div class="nav locked">${label}<span class="muted small" style="margin-left:auto">P${D.UNLOCKS[gate]}</span></div>`;
-      const isNew = gate && !S.seen[v];
-      const b = navBadge(v);
-      return `<button class="nav ${v === view ? 'active' : ''}" data-act="nav" data-view="${v}">${label}${isNew ? '<span class="new">New</span>' : b ? `<span class="count badge">${b > 99 ? '99+' : b}</span>` : ''}</button>`;
-    }).join('')).join('');
+  const isNew = v => GATE[v] && E.unlocked(GATE[v]) && !S.seen[v];
 
-    const inMore = !TABS.some(([v]) => v === view);
-    $('#tabbar').innerHTML = TABS.map(([v, label, gate]) => {
-      const locked = gate && !isUnlocked(gate);
-      // Referrals are always nonzero mid-game, so only flag them once a 10-pull is possible.
-      const b = locked ? 0 : v === 'recruit' ? (S.referrals >= 10 ? S.referrals : 0) : navBadge(v);
-      const isNew = gate && !locked && !S.seen[v];
-      return `<button class="tab-btn ${v === view ? 'active' : ''} ${locked ? 'locked' : ''}" data-act="${locked ? 'lockedTab' : 'nav'}" data-view="${v}">${icon(v)}<span>${label}</span>${b ? `<span class="count">${b > 99 ? '99+' : b}</span>` : isNew ? '<span class="pip"></span>' : ''}</button>`;
-    }).join('') + `<button class="tab-btn ${inMore ? 'active' : ''}" data-act="more">${icon('more')}<span>More</span>${moreAlert() ? '<span class="pip"></span>' : ''}</button>`;
-    $('#viewTitle').textContent = VIEW_LABEL[view];
+  function renderNav() {
+    $('#nav').innerHTML = NAV.map(([sec, items]) => (sec ? `<div class="nav-section">${sec}</div>` : '<div class="nav-section">&nbsp;</div>') + items.map(([v, label]) => {
+      if (isLocked(v)) return `<div class="nav locked">${icon(v)}${label}<span class="lock">Career ${gateLevel(GATE[v])}</span></div>`;
+      const b = navBadge(v);
+      return `<button class="nav ${v === view ? 'active' : ''}" data-act="nav" data-view="${v}" data-coach="nav-${v}">${icon(v)}${label}${isNew(v) ? '<span class="new">New</span>' : b ? `<span class="count">${b > 99 ? '99+' : b}</span>` : ''}</button>`;
+    }).join('')).join('');
+    const inMore = !TABS.includes(view);
+    const moreAlert = MORE.some(v => isNew(v)) || (E.unlocked('hiring') && S.referrals >= 5);
+    $('#tabbar').innerHTML = TABS.map(v => {
+      const b = navBadge(v);
+      return `<button class="tab-btn ${v === view ? 'active' : ''}" data-act="nav" data-view="${v}" data-coach="tab-${v}">${icon(v)}<span>${LABEL[v]}</span>${b ? `<span class="count">${b > 99 ? '99+' : b}</span>` : ''}</button>`;
+    }).join('') + `<button class="tab-btn ${inMore ? 'active' : ''}" data-act="more" data-coach="tab-more">${icon('more')}<span>More</span>${moreAlert ? '<span class="pip"></span>' : ''}</button>`;
+    $('#viewTitle').textContent = LABEL[view];
     if (!$('#sheet').classList.contains('hidden')) renderSheet();
   }
-
-  function moreAlert() {
-    return MORE.some(([v, gate]) => gate && isUnlocked(gate) && !S.seen[v])
-      || actionable().some(a => a.count && MORE.some(([v]) => v === a.view));
-  }
-
   function renderSheet() {
-    const items = MORE.map(([v, gate]) => {
-      const locked = gate && !isUnlocked(gate);
-      const b = locked ? 0 : navBadge(v);
-      const right = locked ? `<span class="right">Unlocks at project ${D.UNLOCKS[gate]}</span>`
-        : gate && !S.seen[v] ? '<span class="right new">New</span>'
-          : b ? `<span class="right count">${b > 99 ? '99+' : b}</span>` : '';
-      return `<button class="sheet-item ${locked ? 'locked' : ''} ${v === view ? 'active' : ''}" ${locked ? '' : `data-act="nav" data-view="${v}"`}>${icon(v)}<span>${VIEW_LABEL[v]}</span>${right}</button>`;
-    }).join('');
-    $('#sheetBox').innerHTML = `<div class="sheet-handle"></div>${items}<div class="sheet-sep"></div>
-      ${isStandalone() ? '' : `<button class="sheet-item" data-act="install">${icon('install')}<span>Install on this device</span></button>`}
-      <button class="sheet-item" data-act="decoy">${icon('report')}<span>Report view</span><span class="right muted">hides the game</span></button>`;
+    $('#sheetBox').innerHTML = '<div class="sheet-handle"></div>' + MORE.map(v => {
+      if (isLocked(v)) return `<div class="sheet-item locked">${icon(v)}<span>${LABEL[v]}</span><span class="right">Career ${gateLevel(GATE[v])}</span></div>`;
+      const b = navBadge(v);
+      return `<button class="sheet-item ${v === view ? 'active' : ''}" data-act="nav" data-view="${v}" data-coach="sheet-${v}">${icon(v)}<span>${LABEL[v]}</span>${isNew(v) ? '<span class="right new">New</span>' : b ? `<span class="right count">${b}</span>` : ''}</button>`;
+    }).join('') + '<div class="sheet-sep"></div>'
+      + (isStandalone() ? '' : `<button class="sheet-item" data-act="install">${icon('install')}<span>Install on this device</span></button>`)
+      + `<button class="sheet-item" data-act="decoy">${icon('report')}<span>Report view</span><span class="right muted">hides the game</span></button>`;
   }
-  function openSheet() { renderSheet(); $('#sheet').classList.remove('hidden'); }
-  function closeSheet() { $('#sheet').classList.add('hidden'); }
+  const openSheet = () => { renderSheet(); $('#sheet').classList.remove('hidden'); updateCoach(); };
+  const closeSheet = () => $('#sheet').classList.add('hidden');
 
   function go(v) {
+    if (isLocked(v)) return toast(`${LABEL[v]} unlocks at career level ${gateLevel(GATE[v])}`);
     view = v;
     S.seen[v] = true;
     closeSheet();
+    if (!$('#overlay').classList.contains('hidden')) closeDialog();
     if (v === 'settings') refreshPacked();
     renderNav();
     renderView(true);
     window.scrollTo(0, 0);
   }
 
-  // ================================================================ install, app badge & moving between devices
+  // ================================================================ shared pieces
+
+  function bestOffer() {
+    let best = null, bestV = -1;
+    for (const o of S.offers) {
+      const team = E.recommend(o);
+      if (!team) continue;
+      const f = E.forecast(o, team);
+      const v = f.p4 * 2 + (o.tut ? 10 : 0) + estimate(o, f) / Math.max(1, o.dur) * 0.0001;
+      if (v > bestV) { bestV = v; best = o; }
+    }
+    return best;
+  }
+  const estimate = (o, f) => E.cashFor(o.tier, o.size, clamp(Math.round(f.mean), 1, 5)) * Math.pow(o.m || 1, 0.92) * (o.vip ? 1.5 : 1);
+
+  function wsItem(w, i) {
+    if (!w) {
+      const rec = bestOffer();
+      return `<div class="ws free"><div class="ws-ico">+</div><div class="grow"><b>Free workstream</b>
+        <div class="muted small">${rec ? `Suggested: ${esc(rec.name)} for ${esc(rec.client)} · ${fmtDur(rec.dur)}` : 'Nobody is free right now'}</div></div>
+        ${rec ? `<button class="btn primary" data-act="start" data-offer="${rec.id}" data-coach="${rec.tut ? 'offer-tut' : 'offer-any'}">Start</button>` : ''}
+        <button class="btn ghost" data-act="nav" data-view="projects">Browse</button></div>`;
+    }
+    const done = now() >= w.end;
+    return `<div class="ws ${done ? 'done' : ''}" ${i === 0 ? 'data-coach="ws0"' : ''}>
+      <span class="logo">${A.logo(w.offer.client)}</span>
+      <div class="grow"><div class="ws-title"><b>${esc(w.offer.name)}</b> <span class="muted small">· ${esc(w.offer.client)}</span></div>
+        <div class="ws-meta">${stack(w.team)}<span class="muted small">${sizeLabel(w.offer)}</span>${w.offer.vip ? '<span class="chip vip">VIP</span>' : ''}</div>
+        ${done ? '<div class="small good">Delivered. Waiting for your sign-off.</div>' : `<div class="bar"><div class="fill" data-progress="${i}" style="width:${clamp((now() - w.start) / (w.end - w.start), 0, 1) * 100}%"></div></div><div class="muted small" data-eta="${w.end}"></div>`}
+      </div>
+      ${done ? `<button class="btn primary glow" data-act="signoff" data-slot="${i}" data-coach="signoff">Sign off</button>` : ''}
+    </div>`;
+  }
+  const wsList = () => `<div class="ws-list">${Array.from({ length: E.wsCount() }, (_, i) => wsItem(S.ws[i], i)).join('')}</div>`;
+
+  function floorModel() {
+    const zones = {};
+    for (const [z, info] of Object.entries(D.ZONES)) zones[z] = S.funding >= info.funding ? null : `Opens at ${D.FUNDING[info.funding].name}`;
+    return { lv: S.office, funding: S.funding, zones, desks: Math.min(A.DESK_COUNT, 4 + 2 * E.lvl('desks')) };
+  }
+  let floorCache = { key: '', svg: '' };
+  function floorHtml() {
+    const m = floorModel();
+    const key = JSON.stringify(m);
+    if (key !== floorCache.key) floorCache = { key, svg: A.floor(m) };
+    return `<div class="floor" data-key="${hashStr(key)}"><div class="floor-bg">${floorCache.svg}</div><div class="floor-people" data-floor></div></div>`;
+  }
+  const hashStr = s => { let h = 0; for (const c of s) h = (h * 31 + c.charCodeAt(0)) >>> 0; return h; };
+  function personSpot(id, idx, desks) {
+    const t = now();
+    const st = S.staff[id];
+    const phase = (hashStr(id) + Math.floor(t / (7 * 60e3))) % 10;
+    const pending = S.inbox.some(m => m.from === id && m.choices && !m.done);
+    const desk = idx < desks ? A.spot('desk', idx) : null;
+    if (E.resting(id)) return { p: A.spot(E.zoneOpen('lounge') ? 'lounge' : 'coffee', idx), b: '💤' };
+    const w = S.ws.find(x => x && x.team.includes(id));
+    if (w) {
+      if (t >= w.end) return { p: desk || A.spot('coffee', idx), b: '✅' };
+      if (w.team.length > 1 && E.lvl('rooms') > 0 && phase < 3) return { p: A.spot('meeting', (S.ws.indexOf(w) % E.lvl('rooms')) * 4 + w.team.indexOf(id)), b: '🗣️' };
+      return { p: desk || A.spot('coffee', idx), b: pending ? '💬' : '💻' };
+    }
+    if (pending) return { p: desk || A.spot('coffee', idx), b: '💬' };
+    if (!desk || phase < 3) return { p: A.spot('coffee', idx), b: '☕' };
+    return { p: desk, b: st.mood < 35 ? '☁️' : '' };
+  }
+  function updateFloors() {
+    const roots = $$('[data-floor]');
+    if (!roots.length) return;
+    const desks = floorModel().desks;
+    const ids = E.owned();
+    for (const root of roots) {
+      for (const el of [...root.children]) if (!S.staff[el.dataset.id]) el.remove();
+      ids.forEach((id, idx) => {
+        let el = root.querySelector(`[data-id="${id}"]`);
+        if (!el) {
+          el = document.createElement('button');
+          el.className = 'fp-person';
+          el.dataset.act = 'profile';
+          el.dataset.id = id;
+          el.title = who(id).name;
+          el.innerHTML = `${av(id)}<span class="fp-bubble"></span>`;
+          root.appendChild(el);
+        }
+        const { p, b } = personSpot(id, idx, desks);
+        el.style.left = p.x + '%';
+        el.style.top = p.y + '%';
+        el.querySelector('.fp-bubble').textContent = b;
+      });
+    }
+  }
+
+  function commitChip() {
+    if (!E.unlocked('commit') || !S.commit) return '';
+    const c = S.commit;
+    if (c.tier === null) return `<button class="commit" data-act="nav" data-view="inbox">🎯 <b>Set today's commitment</b></button>`;
+    const pips = Array.from({ length: Math.min(c.target, 24) }, (_, i) => `<i class="${i < c.progress ? 'on' : ''}"></i>`).join('');
+    return `<div class="commit ${c.paid ? 'done' : ''}">🎯 <b>${E.COMMIT_NAMES[c.tier]}</b><span class="pips">${pips}</span><span>${Math.min(c.progress, c.target)}/${c.target}${c.paid ? ' ✓' : ''}</span></div>`;
+  }
+
+  // ================================================================ views
+
+  const VIEWS = {};
+
+  function greeting() {
+    const h = new Date().getHours();
+    return `Good ${h < 12 ? 'morning' : h < 18 ? 'afternoon' : 'evening'}${S.name ? ', ' + esc(S.name) : ''}`;
+  }
+  const NEXT_ICON = { signoff: '✅', inbox: '💬', quickstart: '▶️', projects: '📁', office: '🏢', hiring: '🤝', home: '⏳' };
+  function nextCard() {
+    const step = E.nextStep();
+    let btn = '';
+    if (step.action === 'signoff') btn = `<button class="btn primary" data-act="signoffAll" data-coach="next">Sign off${step.count > 1 ? ` all (${step.count})` : ''}</button>`;
+    else if (step.action === 'quickstart') btn = `<button class="btn primary" data-act="start" data-offer="${step.offer}" data-coach="next">Start a project</button>`;
+    else if (step.action === 'inbox') btn = '<button class="btn primary" data-act="nav" data-view="inbox" data-coach="next">Open inbox</button>';
+    else if (step.action === 'projects') btn = '<button class="btn primary" data-act="nav" data-view="projects" data-coach="next">Go to projects</button>';
+    else if (step.action === 'office') btn = '<button class="btn primary" data-act="nav" data-view="office" data-coach="next">Open the office</button>';
+    else if (step.action === 'hiring') btn = '<button class="btn primary" data-act="nav" data-view="hiring" data-coach="next">Interview</button>';
+    return `<div class="card next"><div class="next-ico">${NEXT_ICON[step.action] || '•'}</div><div class="grow"><div class="muted small">Next step</div><b>${esc(step.text)}</b>
+      ${step.at ? `<div class="muted small" data-eta="${step.at}"></div>` : ''}</div>${btn}</div>`;
+  }
+  function installCard() {
+    if (!compact() || isStandalone() || S.settings.installHint === false || S.tut !== -1) return '';
+    return `<div class="card next install"><div class="next-ico">📲</div><div class="grow"><b>Install Workforce on this phone</b><div class="muted small">Full-screen from your home screen, works offline.</div></div>
+      <button class="btn primary" data-act="install">Install</button><button class="btn" data-act="dismissInstall">Not now</button></div>`;
+  }
+  function inboxPreview() {
+    const items = S.inbox.filter(m => m.choices && !m.done).slice(0, 3);
+    const list = items.length ? items : S.inbox.slice(0, 3);
+    if (!list.length) return '<p class="muted small">Quiet for now. Your team will message you when they need you.</p>';
+    return `<div class="msgs">${list.map(m => msgCard(m, true)).join('')}</div>`;
+  }
+
+  VIEWS.home = () => `
+    <div class="page-head"><div><div class="muted small">${greeting()}</div><h1>Home</h1></div>${commitChip()}</div>
+    ${nextCard()}
+    ${installCard()}
+    <div class="home-grid">
+      <div class="card home-floor"><div class="card-title">Floor plan <span class="muted small">· ${D.FUNDING[S.funding].name}</span><span class="spacer"></span><button class="btn sm ghost" data-act="nav" data-view="office">Office</button></div>${floorHtml()}</div>
+      <div class="home-side">
+        <div class="card"><div class="card-title">Projects in flight<span class="spacer"></span><button class="btn sm ghost" data-act="nav" data-view="projects">All offers</button></div>${wsList()}</div>
+        <div class="card"><div class="card-title">Inbox ${pendingCount() ? `<span class="count">${pendingCount()}</span>` : ''}<span class="spacer"></span><button class="btn sm ghost" data-act="nav" data-view="inbox">Open</button></div>${inboxPreview()}</div>
+      </div>
+    </div>
+    <div class="card"><div class="card-title">Recent</div><ul class="feed">${S.log.slice(0, 6).map(l => `<li class="${l.kind}"><span class="t">${ago(l.t)}</span><span>${esc(l.text)}</span></li>`).join('') || '<li class="muted">Nothing yet.</li>'}</ul></div>`;
+
+  function offerCard(o) {
+    const team = E.recommend(o);
+    const f = team && E.forecast(o, team);
+    const free = E.freeSlot() >= 0;
+    const coach = o.tut ? 'offer-tut' : 'offer-any';
+    return `<div class="offer ${o.vip ? 'vip' : ''} ${o.tut ? 'tut' : ''}">
+      <div class="offer-top"><span class="logo">${A.logo(o.client)}</span><div class="grow"><b>${esc(o.name)}</b><div class="muted small">${esc(o.client)}</div></div>
+        ${o.vip ? '<span class="chip vip">VIP · pays 1.5×</span>' : o.stretch ? '<span class="chip stretch">Stretch</span>' : ''}</div>
+      <div class="offer-facts"><span class="chip">⏱ ${fmtDur(o.dur)}</span><span class="chip">👥 ${D.SIZES[o.size].staff} · ${D.SIZES[o.size].name}</span>${o.needs.map(roleChip).join('')}</div>
+      ${team ? `<div class="forecast"><div class="fc-bar"><div style="width:${Math.round(f.p4 * 100)}%"></div></div><span>${Math.round(f.p4 * 100)}% chance of 4★+</span></div>
+        <div class="offer-foot">${stack(team, 'sm')}<span class="est">≈ ${money(estimate(o, f))}</span>
+          <button class="btn primary" data-act="start" data-offer="${o.id}" data-coach="${coach}" ${free ? '' : 'disabled'}>${free ? 'Start' : 'No free slot'}</button></div>`
+        : `<div class="muted small">Needs ${D.SIZES[o.size].staff} available ${D.SIZES[o.size].staff > 1 ? 'people' : 'person'}.</div>`}
+    </div>`;
+  }
+  VIEWS.projects = () => {
+    const busy = S.ws.filter(Boolean).length;
+    const cd = S.refreshAt - now();
+    return `
+    <div class="page-head"><div><div class="muted small">${busy}/${E.wsCount()} workstreams busy${E.wsCount() < 5 ? ' · more with meeting rooms' : ''}</div><h1>Projects</h1></div>
+      <div class="actions"><button class="btn" data-act="refresh" ${cd > 0 ? 'disabled' : ''}>${cd > 0 ? `New offers in ${fmtDur(cd / 1000)}` : 'Refresh offers'}</button></div></div>
+    <div class="card"><div class="card-title">In flight</div>${wsList()}</div>
+    <div class="card"><div class="card-title">Offers <span class="muted small">· sized to your team</span></div><div class="offers">${S.offers.map(offerCard).join('')}</div>
+      <p class="muted small">Forecasts use your best available people. Matching the roles a client needs helps a lot. Longer jobs pay a little less per minute but keep working while you're in meetings.</p></div>`;
+  };
+
+  function msgCard(m, mini) {
+    const w = who(m.from);
+    const pending = m.choices && !m.done;
+    let body = '';
+    if (pending) {
+      body = `<div class="choices">${m.choices.map((label, i) => {
+        const cost = E.choiceCost(m, i);
+        let sub = cost ? ` · ${money(cost)}` : '';
+        if (m.kind === 'commit') { const r = E.commitReward(i); sub = ` · +${r.refs} referral${r.refs > 1 ? 's' : ''}`; }
+        return `<button class="btn ${i === 0 ? 'primary' : ''}" data-act="answer" data-msg="${m.id}" data-i="${i}" ${cost > S.cash ? 'disabled' : ''}>${esc(label)}${sub ? `<span class="sub">${esc(sub.slice(3))}</span>` : ''}</button>`;
+      }).join('')}</div>`;
+    } else if (m.done && m.choices) {
+      if (m.done.expired) body = '<div class="reply muted small">No reply.</div>';
+      else body = `<div class="reply"><div class="you">You: ${esc(m.choices[m.done.idx] || '')}</div>${m.done.reply && !mini ? `<div class="them">${esc(m.done.reply)}</div>` : ''}</div>`;
+    }
+    if (m.reactions && !m.done) body = `<div class="reacts">${['👍', '😂', '❤️'].map(e => `<button class="btn sm" data-act="react" data-msg="${m.id}" data-e="${e}">${e}</button>`).join('')}</div>`;
+    else if (m.reactions && m.done && !mini) body = `<div class="reply muted small">You reacted ${m.done.reaction}</div>`;
+    let cta = '';
+    if (m.unlock && !mini) {
+      const target = { hiring: 'hiring', league: 'league', commit: 'inbox', gear: 'team' }[m.unlock];
+      if (target && target !== 'inbox') cta = `<div class="choices"><button class="btn" data-act="nav" data-view="${target}">Open ${LABEL[target]}</button></div>`;
+    }
+    const cls = [pending ? 'pending' : '', m.read ? '' : 'unread', m.kind === 'outcome' ? (m.good ? 'outcome-good' : 'outcome-bad') : '', m.kind === 'funding' ? 'funding' : ''].join(' ');
+    const extra = m.kind === 'funding' ? `<div class="small good" style="margin-top:6px">+${money(m.amount)} funding · revenue ×1.5 for good · new office space</div>` : '';
+    return `<div class="msg ${cls}">${av(m.from, 'sm')}<div class="grow"><div class="msg-head"><span class="msg-name">${esc(w.name)}</span><span class="muted small">${esc(w.title)} · ${ago(m.at)}</span></div>
+      <div class="msg-text">${esc(m.text)}</div>${extra}${body}${cta}</div></div>`;
+  }
+  VIEWS.inbox = () => {
+    const pend = S.inbox.filter(m => m.choices && !m.done);
+    const rest = S.inbox.filter(m => !(m.choices && !m.done)).slice(0, 40);
+    setTimeout(() => { for (const m of S.inbox) m.read = true; }, 1500);
+    return `<div class="page-head"><div><div class="muted small">${pend.length ? `${pend.length} waiting for you` : 'All answered'} · decisions expire after a few hours</div><h1>Inbox</h1></div></div>
+      <div class="msgs">${pend.map(m => msgCard(m)).join('')}${rest.map(m => msgCard(m)).join('') || '<p class="muted">Nothing here yet.</p>'}</div>`;
+  };
+
+  function personCard(id) {
+    const st = S.staff[id], p = E.PEOPLE[id];
+    const s = statusOf(id);
+    const need = E.xpNeed(st.lvl);
+    return `<button class="pcard" data-act="profile" data-id="${id}">${av(id, 'lg')}<div class="grow">
+      <b>${esc(p.name)}</b><div class="muted small">${esc(jobTitle(id))}</div>
+      <div class="pc-row">${band(p.r)}${st.stars ? starsHtml(st.stars) : ''}</div>
+      <div class="pc-row"><span class="nowrap">Lvl ${st.lvl}</span><div class="bar thin"><div class="fill" style="width:${100 * st.xp / need}%"></div></div></div>
+      <div class="pc-row">${A.moodFace(st.mood)}<span>${moodWord(st.mood)}</span>${heartsHtml(id)}</div>
+      <div class="pc-row"><span class="status-tag ${s.cls}">${esc(s.text)}</span></div></div></button>`;
+  }
+  VIEWS.team = () => {
+    const ids = E.owned().sort((a, b) => E.skill(b) - E.skill(a));
+    return `<div class="page-head"><div><div class="muted small">${ids.length} ${ids.length === 1 ? 'person' : 'people'} · tap someone to see their profile</div><h1>Team</h1></div>
+      ${E.unlocked('hiring') ? `<div class="actions"><button class="btn primary" data-act="nav" data-view="hiring">Hire${S.referrals ? ` (${S.referrals} referral${S.referrals > 1 ? 's' : ''})` : ''}</button></div>` : ''}</div>
+      <div class="people">${ids.map(personCard).join('')}</div>
+      <p class="muted small">People level up by delivering projects. Happy, rested people with matching skills earn better reviews. Coffee chats build bonds, and bonds unlock their stories.</p>`;
+  };
+
+  VIEWS.hiring = () => {
+    const w = D.RARITY.map((r, i) => r.weight * (i >= 2 ? 1 + 0.15 * E.lvl('recruit') : 1));
+    const tw = w.reduce((a, b) => a + b, 0);
+    const dir = D.PEOPLE.map(p => {
+      const st = S.staff[p.id];
+      return `<div class="dir-p ${st ? '' : 'no'}"><span class="av lg">${A.avatar(p.look, { mono: !st })}</span><b>${st ? esc(p.name) : '???'}</b>${band(p.r)}<span class="muted">${st ? (st.stars ? starsHtml(st.stars) : 'Lvl ' + st.lvl) : esc(D.ROLES[p.role].name)}</span></div>`;
+    }).join('');
+    return `<div class="page-head"><div><div class="muted small">${S.referrals} referral${S.referrals === 1 ? '' : 's'} · each one is an interview</div><h1>Hiring</h1></div>
+      <div class="actions"><button class="btn" data-act="interview" data-n="1" ${S.referrals < 1 ? 'disabled' : ''}>Interview 1</button>
+      <button class="btn primary" data-act="interview" data-n="5" ${S.referrals < 5 ? 'disabled' : ''}>Interview 5</button></div></div>
+      <div class="grid2">
+        <div class="card"><div class="card-title">How hiring works</div><p class="small" style="margin-top:0">Every interview brings in a candidate. New faces join the team. Someone you already have gets <b>promoted</b> instead: each promotion star is +25% skill.</p>
+          <p class="muted small">Referrals come from your daily commitment, the weekly league, five-star reviews and the occasional decision.</p></div>
+        <div class="card"><div class="card-title">Odds</div><table class="table"><tbody>${D.RARITY.map((r, i) => `<tr><td>${band(i)}</td><td class="num">${(100 * w[i] / tw).toFixed(1)}%</td></tr>`).join('')}</tbody></table>
+          <p class="muted small">Staff or better guaranteed within <b>${25 - S.pity}</b> interviews; Principal within <b>${80 - S.pityL}</b>.</p></div>
+      </div>
+      <div class="card"><div class="card-title">Directory <span class="muted small">${E.owned().length}/${D.PEOPLE.length} hired</span></div><div class="dir">${dir}</div></div>`;
+  };
+
+  VIEWS.office = () => {
+    const builds = S.builds.map(b => {
+      const o = E.OFFICE[b.id];
+      return `<div class="ws"><div class="ws-ico">🏗️</div><div class="grow"><b>${esc(o.name)}</b> → level ${E.lvl(b.id) + 1}
+        <div class="bar"><div class="fill" style="width:${clamp((now() - b.start) / (b.end - b.start), 0, 1) * 100}%"></div></div><div class="muted small" data-eta="${b.end}"></div></div></div>`;
+    }).join('');
+    const zones = Object.entries(D.ZONES);
+    const upg = zones.map(([zid, z]) => {
+      const items = D.OFFICE.filter(o => o.zone === zid);
+      return items.map(o => {
+        const l = E.lvl(o.id);
+        const block = E.buildBlock(o.id);
+        const maxed = l >= o.max;
+        const zoneLocked = !E.zoneOpen(zid);
+        const lname = o.levels && l ? o.levels[l - 1] : l ? `Level ${l}` : 'Not built';
+        const dots = o.max <= 10 ? `<div class="dots">${Array.from({ length: o.max }, (_, i) => `<i class="${i < l ? 'on' : ''}"></i>`).join('')}</div>` : `<div class="muted small">Level ${l}/${o.max}</div>`;
+        return `<div class="upg ${maxed ? 'maxed' : ''} ${zoneLocked ? 'locked' : ''}"><div class="card-title" style="margin:0">${esc(o.name)}<span class="spacer"></span><span class="muted small">${esc(z.name)}</span></div>
+          ${dots}<div class="small">${esc(lname)}${l ? ` · ${esc(o.fx(l))}` : ''}</div>
+          ${maxed ? '<div class="small good">✓ Fully upgraded</div>' : `<div class="muted small">Next: ${esc(o.fx(l + 1))}</div>
+          <div class="row" style="margin:0"><button class="btn ${block ? '' : 'primary'}" data-act="build" data-id="${o.id}" ${block ? 'disabled' : ''} data-coach="build-${o.id}">${zoneLocked ? esc(block) : `Build · ${money(E.buildCost(o.id))}`}</button>
+            <span class="muted small">${zoneLocked ? '' : block && block !== 'Not enough budget' ? esc(block) : '⏱ ' + fmtDur(E.buildTime(o.id))}</span></div>`}</div>`;
+      }).join('');
+    }).join('');
+    return `<div class="page-head"><div><div class="muted small">${money(S.cash)} budget · ${E.crews()} build crew${E.crews() > 1 ? 's' : ''}</div><h1>Office</h1></div></div>
+      <div class="card">${floorHtml()}</div>
+      ${builds ? `<div class="card"><div class="card-title">Under construction</div><div class="builds">${builds}</div></div>` : ''}
+      <div class="upgrades">${upg}</div>`;
+  };
+
+  VIEWS.league = () => {
+    if (!S.league) return '<p class="muted">The league starts soon.</p>';
+    const rows = E.standings();
+    const daysLeft = (S.league.end - now()) / 86400e3;
+    const n = rows.length;
+    return `<div class="page-head"><div><div class="muted small">Ends in ${daysLeft >= 1 ? Math.floor(daysLeft) + 'd ' : ''}${fmtDur(((S.league.end - now()) % 86400e3) / 1000)}</div><h1>League</h1></div></div>
+      <div class="card"><div class="league-head"><div class="league-badge">🏆</div><div><div class="muted small">This week</div><b style="font-size:18px">${D.LEAGUES[S.leagueTier]} league</b>
+        <div class="muted small">Earn client stars to climb. Top 2 move up, last place moves down.</div></div></div></div>
+      <div class="card"><div class="table-wrap"><table class="table rank"><thead><tr><th>#</th><th>Manager</th><th class="num">Stars</th><th>Team</th></tr></thead><tbody>
+        ${rows.map((r, i) => `<tr class="${r.you ? 'me' : ''} ${i < 2 && S.leagueTier < D.LEAGUES.length - 1 ? 'up' : ''} ${i === n - 1 && S.leagueTier > 0 ? 'down' : ''}">
+          <td>${i + 1}</td><td><span class="nowrap">${r.you ? `<span class="av sm" style="margin-right:8px">${A.avatar(myLook())}</span>` : av('rival:' + r.id, 'sm').replace('class="av sm"', 'class="av sm" style="margin-right:8px"')}${esc(r.name)}</span></td>
+          <td class="num">${r.points}★</td><td class="muted">${esc(r.dept)}</td></tr>`).join('')}
+      </tbody></table></div>
+      <p class="muted small">Finishing rewards: ${D.LEAGUE_REWARDS.slice(0, 4).map((x, i) => `#${i + 1} ${x}`).join(' · ')} referrals.</p></div>`;
+  };
+
+  VIEWS.career = () => {
+    const c = S.career;
+    const need = E.repNeed(c.lvl);
+    let title = D.CAREER_TITLES[0][1];
+    for (const [l, t] of D.CAREER_TITLES) if (c.lvl >= l) title = t;
+    const next = D.FUNDING[S.funding + 1];
+    const rounds = D.FUNDING.slice(1).map((f, i) => {
+      const k = i + 1;
+      const state = S.funding >= k ? 'done' : S.funding + 1 === k ? 'next' : '';
+      return `<div class="round ${state}"><span class="dotc">${S.funding >= k ? '✓' : ''}</span><b>${esc(f.name)}</b><span class="muted small">${money(f.at)} lifetime revenue</span></div>`;
+    }).join('');
+    const ach = E.ACH.map(a => `<div class="badgec ${S.achievements[a.id] ? 'yes' : 'no'}"><b>${esc(a.name)}</b><span class="muted">${esc(a.desc)}</span></div>`).join('');
+    return `<div class="page-head"><div><div class="muted small">Career level ${c.lvl}</div><h1>Career</h1></div></div>
+      <div class="grid2">
+        <div class="card"><div class="card-title">${esc(title)}</div><div class="bar"><div class="fill gold" style="width:${100 * c.rep / need}%"></div></div>
+          <div class="muted small" style="margin-top:6px">${fmt(c.rep)} / ${fmt(need)} reputation to level ${c.lvl + 1}. Reputation comes from every delivery; bigger, better-rated projects give more.</div>
+          <div class="stat-grid"><div class="stat"><label>Deliveries</label><b>${fmt(S.stats.deliveries)}</b></div><div class="stat"><label>Average rating</label><b>${S.stats.deliveries ? (S.stats.stars / S.stats.deliveries).toFixed(2) : '–'}★</b></div><div class="stat"><label>Five-star reviews</label><b>${fmt(S.stats.five)}</b></div></div></div>
+        <div class="card"><div class="card-title">Company</div>
+          ${next ? `<div class="small">Next: <b>${esc(next.name)}</b> at ${money(next.at)} lifetime revenue</div><div class="bar" style="margin:8px 0"><div class="fill green" style="width:${clamp(100 * S.lifetime / next.at, 0, 100)}%"></div></div>` : '<div class="small good">Every milestone reached. Legendary.</div>'}
+          <div class="rounds">${rounds}</div><p class="muted small">Each round adds a funding injection, revenue ×1.5 for good, and opens more office space.</p></div>
+      </div>
+      <div class="card"><div class="card-title">Badges <span class="muted small">${Object.keys(S.achievements).length}/${E.ACH.length} · each +1% team skill</span></div><div class="badges">${ach}</div></div>`;
+  };
+
+  VIEWS.settings = () => `
+    <div class="page-head"><div><h1>Settings</h1></div></div>
+    <div class="card">
+      <label class="field">Your name<input id="setName" maxlength="20" value="${esc(S.name)}" placeholder="Your name" autocomplete="off"></label>
+      <div class="row"><span class="toggle ${S.settings.stealth ? 'on' : ''}" data-act="setting" data-key="stealth"><span class="sw"></span>Stealth mode (no animations or colour flourishes)</span></div>
+      <div class="row"><span class="toggle ${S.settings.badge ? 'on' : ''}" data-act="setting" data-key="badge"><span class="sw"></span>Show a task count in the tab title and on the app icon</span></div>
+      ${E.lvl('pmo') ? `<div class="row"><span class="toggle ${S.settings.autopilot ? 'on' : ''}" data-act="setting" data-key="autopilot"><span class="sw"></span>Autopilot: sign off and restart projects for me</span></div>` : ''}
+    </div>
+    <div class="card"><div class="card-title">Play on another device</div>
+      <p class="small" style="margin-top:0">Send yourself a link that carries this save, then open it on your phone or computer to carry on from here. Whichever device opens it takes over this progress.</p>
+      <div class="row"><button class="btn primary" data-act="transferCopy">Copy transfer link</button>
+        ${navigator.share ? '<button class="btn" data-act="transferShare">Share…</button>' : ''}
+        ${isStandalone() ? '' : '<button class="btn" data-act="install">Install as an app</button>'}</div>
+      <textarea id="transferBox" class="hidden" rows="3" readonly></textarea>
+      <label class="field" style="max-width:none">Got a link from your other device? Paste it here:<textarea id="importBox" rows="2" placeholder="https://…#transfer=…" autocomplete="off"></textarea></label>
+      <div class="row" style="margin-top:0"><button class="btn" data-act="transferImport">Import progress</button></div>
+    </div>
+    <div class="card"><div class="card-title">Help</div>
+      <p class="small" style="margin-top:0">Projects run in real time, even with this tab closed. Check in whenever suits you: sign off deliveries, answer your team, start the next project.</p>
+      <p class="muted small">${compact() ? 'Tap ⧉ at the top' : 'Press <b>Esc</b> or <b>`</b>'} for a very boring report.</p>
+      <div class="row"><button class="btn danger" data-act="reset">Reset everything</button></div>
+    </div>`;
+
+  let pointerDown = false;
+  // Returns false when it held off (mid-tap, dialog open, or typing) so callers can try again next tick.
+  function renderView(force) {
+    const root = $('#view');
+    if (!force) {
+      if (pointerDown || !$('#overlay').classList.contains('hidden')) return false;
+      if (document.activeElement && root.contains(document.activeElement) && /INPUT|TEXTAREA/.test(document.activeElement.tagName)) return false;
+      if (view === 'settings') return false;
+    }
+    const y = window.scrollY;
+    const oldFloor = root.querySelector('.floor');
+    root.innerHTML = VIEWS[view]();
+    const newFloor = root.querySelector('.floor');
+    if (oldFloor && newFloor && oldFloor.dataset.key === newFloor.dataset.key) newFloor.replaceWith(oldFloor);
+    if (!force) window.scrollTo(0, y);
+    updateFloors();
+    live();
+    return true;
+  }
+
+  // ================================================================ live updates (every second)
+
+  let lastReady = '', lastReadyToast = '';
+  function live() {
+    const t = now();
+    $$('[data-progress]').forEach(el => {
+      const w = S.ws[+el.dataset.progress];
+      if (w) el.style.width = clamp((t - w.start) / (w.end - w.start), 0, 1) * 100 + '%';
+    });
+    $$('[data-eta]').forEach(el => {
+      const at = +el.dataset.eta;
+      el.textContent = at > t ? `${fmtDur((at - t) / 1000)} to go` : 'Done';
+    });
+    updateCoach();
+  }
+
+  // ================================================================ dialogs & reveals
+
+  const dialogQueue = [];
+  function openDialog(html, opts = {}) {
+    if (!$('#overlay').classList.contains('hidden') && opts.queue) { dialogQueue.push([html, opts]); return; }
+    $('#dialog').innerHTML = html;
+    $('#dialog').className = 'dialog ' + (opts.cls || '');
+    $('#overlay').classList.remove('hidden');
+    hideCoach();
+    toastList.splice(0).forEach(el => el.remove());
+  }
+  function closeDialog() {
+    $('#overlay').classList.add('hidden');
+    reveal = null;
+    if (dialogQueue.length) { const [h, o] = dialogQueue.shift(); openDialog(h, o); return; }
+    renderNav();
+    renderView(true);
+    toastLater.splice(0).slice(-2).forEach(t => toast(...t));
+  }
+  function confirmDialog(title, body, okLabel, onOk) {
+    confirmCb = onOk;
+    openDialog(`<h3>${esc(title)}</h3>${body}<div class="actions"><button class="btn" data-act="closeDialog">Cancel</button><button class="btn primary" data-act="confirmOk">${esc(okLabel)}</button></div>`);
+  }
+  let confirmCb = null;
+
+  let toastList = [], toastLater = [];
+  function toast(msg, avId) {
+    if (!$('#overlay').classList.contains('hidden')) {
+      if (!toastLater.some(t => t[0] === msg)) toastLater.push([msg, avId]);
+      return;
+    }
+    const el = document.createElement('div');
+    el.className = 'toast';
+    el.innerHTML = (avId ? av(avId) : '') + `<span>${esc(msg)}</span>`;
+    $('#toasts').appendChild(el);
+    toastList.push(el);
+    while (toastList.length > (compact() ? 2 : 3)) toastList.shift().remove();
+    setTimeout(() => { el.remove(); toastList = toastList.filter(x => x !== el); }, 2600 + msg.length * 35);
+  }
+  const buzz = p => { if (!S.settings.stealth && navigator.vibrate) try { navigator.vibrate(p); } catch { /* unsupported */ } };
+
+  // --- client review reveal
+  let reveal = null;
+  const STAR_SVG = '<path d="M12 2.8L14.9 8.7L21.4 9.6L16.7 14.2L17.8 20.6L12 17.6L6.2 20.6L7.3 14.2L2.6 9.6L9.1 8.7Z"/>';
+  function signOffSlots(slots) {
+    const results = [];
+    for (const i of slots) { const r = E.signOff(i); if (r) results.push(r); }
+    if (!results.length) return;
+    save();
+    if (results.length > 4) showSummary(results);
+    else showReview(results, 0);
+  }
+  function extrasHtml(r) {
+    const out = [];
+    if (r.career) {
+      let title = '';
+      for (const [l, t] of D.CAREER_TITLES) if (r.career >= l) title = t;
+      out.push(`<div class="extra gold">🎖️<span><b>Career level ${r.career}</b> · ${esc(title)}</span></div>`);
+    }
+    if (r.commitDone) out.push('<div class="extra gold">🎯<span><b>Daily commitment hit!</b> Rewards are in your inbox.</span></div>');
+    for (const it of r.items) {
+      out.push(it.sold
+        ? `<div class="extra">${A.gearIcon(it.slot, it.r)}<span>${esc(D.GEAR[it.slot].items[it.r])} sold to IT surplus</span></div>`
+        : `<div class="extra">${A.gearIcon(it.slot, it.r)}<span><b>${esc(D.GEAR[it.slot].items[it.r])}</b> for ${esc(who(it.owner).first)} (+${it.pct}% skill)</span></div>`);
+    }
+    if (r.refs) out.push('<div class="extra">🤝<span>The client referred someone. <b>+1 referral</b></span></div>');
+    if (r.passed && r.passed.length) out.push(`<div class="extra">🏆<span>You passed <b>${r.passed.map(id => esc(who('rival:' + id).first)).join(', ')}</b> in the league</span></div>`);
+    return out.join('');
+  }
+  function showReview(results, idx) {
+    const r = results[idx];
+    const left = results.length - idx - 1;
+    const quote = pick(D.REVIEWS[r.stars - 1]);
+    reveal = { results, idx };
+    openDialog(`
+      <div class="review-head"><span class="logo">${A.logo(r.offer.client)}</span><div class="grow"><div class="muted small">Client review${results.length > 1 ? ` · ${idx + 1} of ${results.length}` : ''}</div><b>${esc(r.offer.client)}</b> · ${esc(r.offer.name)}</div></div>
+      <div class="rstars">${[1, 2, 3, 4, 5].map(i => `<svg class="rstar" data-star="${i}" viewBox="0 0 24 24">${STAR_SVG}</svg>`).join('')}</div>
+      <div class="verdict ${r.stars === 5 ? 'v5' : ''}" id="verdict">&nbsp;</div>
+      <div class="muted small" style="text-align:center;min-height:16px" id="quote"></div>
+      <div class="money" id="money">$0</div>
+      <div class="xp-list">${r.team.map(id => {
+        const st = S.staff[id], up = r.levelups.find(l => l.id === id);
+        return `<div class="xp-row">${av(id, 'sm')}<span class="nowrap" style="width:84px;overflow:hidden;text-overflow:ellipsis">${esc(who(id).first)}</span>
+          <div class="bar"><div class="fill" data-to="${100 * st.xp / E.xpNeed(st.lvl)}%" style="width:${up ? 0 : Math.max(0, 100 * (st.xp - r.xp) / E.xpNeed(st.lvl))}%"></div></div>
+          ${up ? `<span class="lvlup">LEVEL ${up.to}</span>` : `<span class="muted small nowrap">+${fmt(r.xp)} XP</span>`}</div>`;
+      }).join('')}</div>
+      <div class="extras">${extrasHtml(r)}</div>
+      <div class="actions">${left ? `<button class="btn" data-act="revealAll">Sign off all</button><button class="btn primary" data-act="revealNext">Next review (${left})</button>` : '<button class="btn primary" data-act="closeDialog">Done</button>'}</div>`, { cls: 'review' });
+    const stealth = S.settings.stealth;
+    const step = stealth ? 0 : 230;
+    $$('.rstar').forEach((el, i) => { if (i < r.stars) setTimeout(() => el.classList.add('on'), step * (i + 1)); });
+    setTimeout(() => {
+      const verdict = $('#verdict'), q = $('#quote');
+      if (!verdict || !q) return; // closed before the animation finished
+      verdict.textContent = D.VERDICTS[r.stars - 1];
+      q.textContent = `“${quote}”`;
+      buzz(r.stars === 5 ? [18, 50, 18] : 12);
+    }, step * (r.stars + 1));
+    countUp($('#money'), r.cash, stealth ? 0 : 900);
+    setTimeout(() => $$('.xp-row .fill').forEach(f => { f.style.width = f.dataset.to; }), stealth ? 0 : 350);
+  }
+  function countUp(el, to, ms) {
+    if (!ms) { el.textContent = '+' + money(to); return; }
+    const t0 = performance.now();
+    const stepFn = t => {
+      const k = Math.min(1, (t - t0) / ms);
+      el.textContent = '+' + money(to * (1 - Math.pow(1 - k, 3)));
+      if (k < 1 && document.body.contains(el)) requestAnimationFrame(stepFn);
+    };
+    requestAnimationFrame(stepFn);
+  }
+  function showSummary(results) {
+    const total = results.reduce((a, r) => a + r.cash, 0);
+    const avg = results.reduce((a, r) => a + r.stars, 0) / results.length;
+    const ups = results.flatMap(r => r.levelups);
+    const extras = results.map(extrasHtml).join('');
+    openDialog(`<h3>${results.length} deliveries signed off</h3>
+      <div class="money">+${money(total)}</div><div class="muted small" style="text-align:center">Average rating ${avg.toFixed(1)}★</div>
+      <ul class="feed" style="margin-top:12px">${results.map(r => `<li><span class="logo" style="width:22px;height:22px">${A.logo(r.offer.client)}</span><span class="grow">${esc(r.offer.client)} · ${esc(r.offer.name)}</span><span class="stars">${'★'.repeat(r.stars)}</span></li>`).join('')}</ul>
+      ${ups.length ? `<div class="extras">${ups.map(u => `<div class="extra">${av(u.id, 'sm')}<span><b>${esc(who(u.id).first)}</b> reached level ${u.to}</span></div>`).join('')}</div>` : ''}
+      <div class="extras">${extras}</div>
+      <div class="actions"><button class="btn primary" data-act="closeDialog">Done</button></div>`);
+  }
+
+  // --- hiring reveal
+  let hires = [];
+  function showHires(res) {
+    hires = res;
+    openDialog(`<h3>Interview results</h3><div class="muted small">Tap a résumé to open it.</div>
+      <div class="resumes">${res.map((x, i) => {
+        const p = E.PEOPLE[x.id];
+        const line = x.kind === 'new' ? '<span class="good"><b>New hire!</b></span>' : x.kind === 'star' ? `<span>Promoted to ${'★'.repeat(x.stars)}</span>` : `<span class="muted">Signing bonus ${money(x.cash)}</span>`;
+        return `<button class="resume" data-act="flip" data-i="${i}"><div class="resume-inner"><div class="resume-face front"><b>Résumé</b><span class="muted">Candidate ${i + 1}</span></div>
+          <div class="resume-face back r${p.r}">${av(x.id)}<b>${esc(p.name)}</b>${band(p.r)}${line}</div></div></button>`;
+      }).join('')}</div>
+      <div class="actions"><button class="btn" data-act="flipAll">Open all</button><button class="btn primary" data-act="closeDialog">Done</button></div>`);
+    if (S.settings.stealth) $$('.resume').forEach(el => el.classList.add('flipped'));
+  }
+  function flip(i) {
+    const el = $(`.resume[data-i="${i}"]`);
+    if (!el || el.classList.contains('flipped')) return;
+    el.classList.add('flipped');
+    const p = E.PEOPLE[hires[i].id];
+    if (p.r >= 3) buzz([20, 40, 20, 40, 30]);
+  }
+
+  // --- profile
+  function showProfile(id, chat) {
+    const p = E.PEOPLE[id], st = S.staff[id];
+    if (!p || !st) return;
+    const h = E.hearts(id);
+    const s = statusOf(id);
+    const chatReady = now() - st.lastChat >= 4 * 3600e3;
+    const gear = Object.keys(D.GEAR).map(slot => {
+      const it = S.items.find(i => i.owner === id && i.slot === slot);
+      return `<div class="gear">${A.gearIcon(slot, it ? it.r : 0)}<span>${it ? `${esc(D.GEAR[slot].items[it.r])} <span class="muted">+${it.pct}%</span>` : `<span class="muted">No ${D.GEAR[slot].name.toLowerCase()}</span>`}</span></div>`;
+    }).join('');
+    const story = p.story.map((line, i) => {
+      const need = [1, 3, 5][i];
+      return h >= need ? `<li>${esc(line)}</li>` : `<li class="locked">🔒 Unlocks at ${'♥'.repeat(need)}</li>`;
+    }).join('');
+    const msg = S.inbox.find(m => m.from === id && m.choices && !m.done);
+    openDialog(`<div class="profile-head">${av(id, 'xl')}<div class="grow"><h3>${esc(p.name)}</h3><div class="muted small">${esc(jobTitle(id))}</div>
+        <div class="pc-row">${band(p.r)}${st.stars ? starsHtml(st.stars) : ''}<span class="status-tag ${s.cls}">${esc(s.text)}</span></div></div></div>
+      <div class="quote">“${esc(p.catch)}” · ${esc(p.bio)}</div>
+      ${chat ? `<div class="said">${av(id)}<span>“${esc(chat.said)}”${chat.heartUp ? ' <b class="hearts">♥ Bond up</b>' : ''}</span></div>` : ''}
+      ${msg ? `<div class="row"><button class="btn primary" data-act="nav" data-view="inbox">${esc(p.name.split(' ')[0])} has a message for you</button></div>` : ''}
+      <div class="stat-grid">
+        <div class="stat"><label>Level</label><b>${st.lvl}</b><div class="bar thin"><div class="fill" style="width:${100 * st.xp / E.xpNeed(st.lvl)}%"></div></div></div>
+        <div class="stat"><label>Skill</label><b>${fmt(E.skill(id))}</b></div>
+        <div class="stat"><label>Mood</label><b>${moodWord(st.mood)}</b><div class="bar thin"><div class="fill ${st.mood >= 60 ? 'green' : 'gold'}" style="width:${st.mood}%"></div></div></div>
+        <div class="stat"><label>Bond</label>${heartsHtml(id)}</div>
+        <div class="stat"><label>Delivered</label><b>${st.delivered}</b></div>
+        <div class="stat"><label>Avg rating</label><b>${st.delivered ? (st.starSum / st.delivered).toFixed(1) + '★' : '–'}</b></div>
+      </div>
+      <div class="traits">${p.traits.map(t => `<div class="trait"><b>${esc(D.TRAITS[t].name)}</b>${esc(D.TRAITS[t].desc)}</div>`).join('')}</div>
+      ${E.unlocked('gear') ? `<div class="card-title" style="margin:12px 0 0">Equipment</div><div class="gear-row">${gear}</div>` : ''}
+      <div class="card-title" style="margin:12px 0 0">Their story</div><ul class="story">${story}</ul>
+      <div class="actions"><button class="btn" data-act="closeDialog">Close</button><button class="btn primary" data-act="chat" data-id="${id}" ${chatReady ? '' : 'disabled'}>${chatReady ? '☕ Coffee chat' : `☕ Again in ${fmtDur((st.lastChat + 4 * 3600e3 - now()) / 1000)}`}</button></div>`);
+  }
+
+  // ================================================================ coach marks (first session)
+
+  const COACH = {
+    0: [['offer-tut', 'Start your first project'], ['next', 'Start here'], ['tab-projects', 'Projects'], ['nav-projects', 'Projects']],
+    1: [['ws0', 'Running in real time…']],
+    2: [['signoff', 'Sign it off'], ['next', 'Sign it off']],
+    3: [['build-coffee', 'Build a coffee bar'], ['next', 'Open the office'], ['nav-office', 'Office'], ['tab-more', 'Office is in here'], ['sheet-office', 'Office']],
+    4: [['offer-any', 'Start another'], ['next', 'Start another']],
+  };
+  function hideCoach() { $('#coach').classList.add('hidden'); $('#coachTip').classList.add('hidden'); }
+  function updateCoach() {
+    if (S.tut < 0 || !$('#overlay').classList.contains('hidden')) return hideCoach();
+    for (const [key, text] of COACH[S.tut] || []) {
+      const el = $$(`[data-coach="${key}"]`).find(x => x.offsetParent !== null || x.getClientRects().length);
+      if (!el) continue;
+      const r = el.getBoundingClientRect();
+      if (r.width === 0 || r.bottom < 0 || r.top > window.innerHeight) continue;
+      const ring = $('#coach'), tip = $('#coachTip');
+      Object.assign(ring.style, { left: r.left - 4 + 'px', top: r.top - 4 + 'px', width: r.width + 8 + 'px', height: r.height + 8 + 'px' });
+      ring.classList.remove('hidden');
+      tip.textContent = text;
+      tip.classList.remove('hidden');
+      const above = r.top > 60;
+      Object.assign(tip.style, { left: clamp(r.left, 8, window.innerWidth - tip.offsetWidth - 8) + 'px', top: (above ? r.top - 36 : r.bottom + 10) + 'px' });
+      return;
+    }
+    hideCoach();
+  }
+
+  // ================================================================ engine events → UI
+
+  function drainEvents() {
+    const inReveal = !!reveal;
+    while (pendingEvents.length) {
+      const { type, data } = pendingEvents.shift();
+      if (type === 'levelup' && !inReveal) toast(`${who(data.id).first} reached level ${data.lvl}`, data.id);
+      else if (type === 'career' && !inReveal) toast(`🎖️ Career level ${data.lvl}`);
+      else if (type === 'unlock') toast(`New: ${data.title}`);
+      else if (type === 'built') toast(`🏗️ ${E.OFFICE[data.id].name} upgraded`);
+      else if (type === 'achievement') toast(`🏅 Badge: ${data.name}`);
+      else if (type === 'burnout') toast(`${who(data.id).first} is burnt out and taking a break`, data.id);
+      else if (type === 'funding') {
+        const r = D.FUNDING[data.round];
+        const zones = Object.values(D.ZONES).filter(z => z.funding === data.round).map(z => z.name);
+        openDialog(`<div class="profile-head">${av('ceo', 'xl')}<div><div class="muted small">Alex Rivera · CEO</div><h3>🎉 ${esc(r.name)}!</h3></div></div>
+          <p>${esc(r.line)}</p><div class="extras"><div class="extra gold">💰<span><b>+${money(data.injection)}</b> funding injection</span></div>
+          <div class="extra gold">📈<span>Revenue <b>×1.5</b> for good</span></div>${zones.length ? `<div class="extra">🏢<span>New office space: <b>${esc(zones.join(', '))}</b></span></div>` : ''}</div>
+          <div class="actions"><button class="btn primary" data-act="closeDialog">Let's go</button></div>`, { queue: true });
+      } else if (type === 'message') {
+        const m = data;
+        if (view !== 'inbox' && m.kind !== 'dana' && m.kind !== 'funding' && document.visibilityState === 'visible') toast(`${who(m.from).first}: ${m.text.length > 60 ? m.text.slice(0, 57) + '…' : m.text}`, m.from);
+      }
+    }
+  }
+
+  // ================================================================ install, badge, transfer
 
   let installEvent = null, lastBadge = -1, packed = '';
   const isStandalone = () => window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
   const isIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-  const showInstallCard = () => compact() && !isStandalone() && S.settings.installHint !== false;
-
   function promptInstall() {
     if (installEvent) {
       installEvent.prompt();
-      installEvent.userChoice
-        .then(c => { if (c.outcome === 'accepted') S.settings.installHint = false; })
-        .catch(() => {})
-        .then(() => { installEvent = null; renderView(true); });
+      installEvent.userChoice.then(c => { if (c.outcome === 'accepted') S.settings.installHint = false; }).catch(() => {}).then(() => { installEvent = null; renderView(true); });
       return;
     }
-    modal('Install Atlas Workforce', isIOS()
-      ? `<ol><li>Open this page in <b>Safari</b>.</li><li>Tap the <b>Share</b> button (the square with an arrow).</li><li>Choose <b>Add to Home Screen</b>, then <b>Add</b>.</li></ol>
-         <p class="muted small">It opens full-screen from your home screen and keeps working offline.
-         On iPhone the home-screen app keeps its own save, separate from Safari. To bring this progress along, use <b>Settings → Play on another device</b> and paste the link inside the app.</p>`
-      : `<ol><li>Open the browser menu (⋮).</li><li>Choose <b>Install app</b> or <b>Add to Home screen</b>.</li></ol>
-         <p class="muted small">It opens full-screen from your home screen, keeps working offline, and shares this browser's save.</p>`);
+    openDialog(`<h3>Install Atlas Workforce</h3>${isIOS()
+      ? `<ol><li>Open this page in <b>Safari</b>.</li><li>Tap <b>Share</b> (the square with an arrow).</li><li>Choose <b>Add to Home Screen</b>, then <b>Add</b>.</li></ol>
+         <p class="muted small">It opens full-screen and works offline. On iPhone the home-screen app keeps its own save: use Settings → Play on another device to bring this one along.</p>`
+      : `<ol><li>Open the browser menu (⋮).</li><li>Choose <b>Install app</b> or <b>Add to Home screen</b>.</li></ol><p class="muted small">It opens full-screen, works offline and shares this browser's save.</p>`}
+      <div class="actions"><button class="btn primary" data-act="closeDialog">Got it</button></div>`);
   }
-
   function setAppBadge(n) {
     if (!('setAppBadge' in navigator) || n === lastBadge) return;
     lastBadge = n;
     (n ? navigator.setAppBadge(n) : navigator.clearAppBadge()).catch(() => {});
+  }
+  function updateTitle() {
+    if (!$('#decoy').classList.contains('hidden')) return;
+    const n = E.actionCount();
+    $('#bellCount').textContent = n;
+    $('#bellCount').classList.toggle('hidden', !n);
+    document.title = (S.settings.badge && n ? `(${n}) ` : '') + 'Atlas Workforce';
+    setAppBadge(S.settings.badge ? n : 0);
   }
 
   function toB64url(bytes) {
@@ -985,9 +818,8 @@
     const bin = atob(str.replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((str.length + 3) % 4));
     return Uint8Array.from(bin, c => c.charCodeAt(0));
   }
-  // A save fits comfortably in a link: ~3–8 KB of JSON, deflated to a third of that.
   async function packSave() {
-    const data = Object.assign({}, S, { offers: [], lastPull: [], blocker: null, lastSeen: now() });
+    const data = Object.assign({}, E.state, { offers: [], log: [], lastSeen: now(), lastTick: now() });
     let bytes = new TextEncoder().encode(JSON.stringify(data)), tag = 'j';
     if (window.CompressionStream) {
       try {
@@ -1003,388 +835,28 @@
       ? await new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).text()
       : new TextDecoder().decode(bytes);
     const data = JSON.parse(json);
-    if (!data || typeof data !== 'object' || !data.staff || !Array.isArray(data.squad)) throw new Error('not a save');
+    if (!data || typeof data !== 'object' || !data.staff) throw new Error('not a save');
     return data;
   }
-  // Clipboard and share sheets need the user's tap to still be "fresh", so keep a link ready ahead of time.
-  async function refreshPacked() {
-    try { packed = await packSave(); } catch { packed = ''; }
-  }
+  async function refreshPacked() { try { packed = await packSave(); } catch { packed = ''; } }
   const transferUrl = code => `${location.origin}${location.pathname}#transfer=${code}`;
-
   async function importCode(text) {
     const t = String(text || '').trim();
     const code = t.includes('#transfer=') ? t.split('#transfer=')[1].trim() : t;
     if (!/^[jz][A-Za-z0-9_-]{20,}$/.test(code)) throw new Error('not a transfer code');
     const data = await unpackSave(code);
-    modal('Continue on this device?',
-      `<p>This link carries progress from another device: <b>project ${esc(data.maxStage)}</b>, ${Object.keys(data.staff).length} people, ${esc(data.ipos || 0)} IPO${data.ipos === 1 ? '' : 's'}.</p>
-       <p>This device is at project ${S.maxStage} with ${owned().length} people. <b>Importing replaces it.</b></p>`,
-      () => {
-        S = hydrate(data);
-        compute();
-        spawn();
-        checkUnlocks(true);
-        if (isUnlocked('engage')) ensureOffers();
-        ensureOkrs();
-        applySettings();
-        $('#meAvatar').textContent = initials(S.name || '?');
+    const career = data.career ? data.career.lvl : '?';
+    confirmDialog('Continue on this device?',
+      `<p>This link carries progress from another device: <b>career level ${esc(career)}</b> with ${Object.keys(data.staff).length} people.</p>
+       <p>This device is at career level ${S.career.lvl} with ${E.owned().length} people. <b>Importing replaces it.</b></p>`, 'Import', () => {
+        S = E.load(data);
+        E.tick();
         save();
-        toast('Progress imported. Your squad is back at work.');
-        go('overview');
-      }, true);
-  }
-
-  // ================================================================ UI: views
-
-  const VIEWS = {};
-
-  VIEWS.overview = () => `
-    <div class="page-head"><div><div class="muted small">${greeting()}</div><h1>Overview</h1></div></div>
-    ${showInstallCard() ? `<div class="card install-card"><div class="grow"><b>Install Workforce on this phone</b>
-      <span class="muted small">Opens full-screen from your home screen and works offline.</span></div>
-      <button class="btn primary" data-act="install">Install</button><button class="btn" data-act="dismissInstall">Not now</button></div>` : ''}
-    <div class="grid2">
-      <div class="card project" id="pjCard">
-        <div class="muted small" id="pjClient"></div>
-        <h2 id="pjTitle"></h2>
-        <div class="phase" id="pjPhase">${'<span></span>'.repeat(WAVES)}</div>
-        <div class="blocker"><span class="tag" id="blTag"></span><b id="blName"></b><span class="grow"></span><span class="bad small" id="blTimer"></span></div>
-        <div class="bar"><div class="fill" id="blBar"></div></div>
-        <div class="muted small" id="blHp" style="margin-top:4px"></div>
-        <div class="proj-actions">
-          <button class="btn primary" data-act="assist" title="Space">Assist</button>
-          <button class="btn" data-act="allhands" id="btnAllhands" title="Key 1">All-hands</button>
-          <button class="btn ${isUnlocked('pizza') ? '' : 'hidden'}" data-act="pizza" id="btnPizza" title="Key 2">Pizza Friday</button>
-          <button class="btn hidden" data-act="attempt" id="btnAttempt">Attempt launch</button>
-          <span class="toggle" data-act="autoAdvance" id="tgAuto"><span class="sw"></span>Auto-advance</span>
-        </div>
-        <div id="floaters"></div>
-      </div>
-      <div class="card upnext"><div class="card-title">Up next</div><ul id="upNext"></ul></div>
-    </div>
-    <div class="kpis">
-      <div class="kpi"><label>Team output</label><b id="kDps"></b><span>per second</span></div>
-      <div class="kpi"><label>Revenue</label><b id="kCash"></b><span id="kIncome"></span></div>
-      <div class="kpi"><label>Referrals</label><b id="kRef"></b><span>for recruiting</span></div>
-      <div class="kpi"><label>Patents</label><b id="kPat"></b><span>for R&amp;D</span></div>
-      <div class="kpi"><label>Highest project</label><b id="kMax"></b><span id="kShares"></span></div>
-    </div>
-    <div class="grid2">
-      <div class="card"><div class="card-title">Squad <span class="muted small" id="sqCount"></span>
-        <span class="actions"><button class="btn sm" data-act="levelSquad">Level all</button><button class="btn sm" data-act="bestSquad">Best squad</button></span></div>
-        <div class="table-wrap" id="squadMini"></div></div>
-      <div class="card"><div class="card-title">Activity</div><ul class="feed" id="feed">${feedHtml()}</ul></div>
-    </div>`;
-
-  function greeting() {
-    const h = new Date().getHours();
-    return `Good ${h < 12 ? 'morning' : h < 18 ? 'afternoon' : 'evening'}${S.name ? ', ' + esc(S.name) : ''}`;
-  }
-
-  function updateOverview() {
-    const b = S.blocker;
-    if (!$('#pjCard')) return;
-    $('#pjCard').classList.toggle('boss', b.boss);
-    $('#pjClient').textContent = `Project ${S.stage} · Phase ${S.wave}/${WAVES}`;
-    $('#pjTitle').textContent = projectName(S.stage);
-    const spans = $('#pjPhase').children;
-    for (let i = 0; i < WAVES; i++) {
-      spans[i].className = (i + 1 < S.wave ? 'done' : i + 1 === S.wave ? 'cur' : '') + (isBossWave(S.stage, i + 1) ? ' boss' : '');
-    }
-    const tag = $('#blTag');
-    tag.className = 'tag' + (b.boss ? ' boss' : S.farming ? ' farm' : '');
-    tag.textContent = b.boss ? 'LAUNCH' : S.farming ? 'Regrouping' : 'Blocker';
-    $('#blName').textContent = b.name;
-    $('#blBar').style.width = (100 * Math.max(0, b.hp) / b.max) + '%';
-    $('#blHp').textContent = `${fmt(Math.max(0, b.hp))} / ${fmt(b.max)} effort remaining`;
-    $('#blTimer').textContent = b.boss ? `Deadline ${Math.max(0, Math.ceil((b.deadline - now()) / 1000))}s` : '';
-    const t = now();
-    const ah = $('#btnAllhands');
-    ah.disabled = t < S.allHandsReady;
-    ah.classList.toggle('on', t < S.allHandsUntil);
-    ah.textContent = t < S.allHandsUntil ? `All-hands · ${Math.ceil((S.allHandsUntil - t) / 1000)}s` : t < S.allHandsReady ? `All-hands (${fmtDur((S.allHandsReady - t) / 1000)})` : 'All-hands';
-    const pz = $('#btnPizza');
-    pz.disabled = t < S.pizzaReady;
-    pz.classList.toggle('on', t < S.pizzaUntil);
-    pz.textContent = t < S.pizzaUntil ? `Pizza · ${Math.ceil((S.pizzaUntil - t) / 1000)}s` : t < S.pizzaReady ? `Pizza Friday (${fmtDur((S.pizzaReady - t) / 1000)})` : 'Pizza Friday';
-    $('#btnAttempt').classList.toggle('hidden', !S.farming);
-    $('#tgAuto').classList.toggle('on', S.autoAdvance);
-    $('#kDps').textContent = fmt(C.dps);
-    $('#kCash').textContent = money(S.cash);
-    $('#kIncome').textContent = `+${money(C.income * (t < S.pizzaUntil ? 3 : 1))}/s`;
-    $('#kRef').textContent = fmt(S.referrals);
-    $('#kPat').textContent = fmt(S.patents);
-    $('#kMax').textContent = S.maxStage;
-    $('#kShares').textContent = S.ipos ? `${S.ipos} IPO${S.ipos > 1 ? 's' : ''} · ${fmt(S.shares)} shares` : 'all time';
-  }
-
-  function updateOverviewSlow() {
-    if (!$('#squadMini')) return;
-    $('#sqCount').textContent = `${S.squad.length}/${squadSlots()}`;
-    const total = S.squad.reduce((a, id) => a + memberOutput(id), 0) || 1;
-    if (compact()) {
-      $('#squadMini').innerHTML = S.squad.map(id => {
-        const out = memberOutput(id), c = levelCost(id);
-        return `<div class="mini-row">${avatar(id)}<div class="grow"><div class="nm">${esc(PEOPLE[id].name)}</div>
-          <div class="muted small">Lvl ${S.staff[id].lvl} · ${fmt(out)}/s</div><div class="bar thin"><div class="fill" style="width:${100 * out / total}%"></div></div></div>
-          <button class="btn sm" data-act="level" data-id="${id}" data-n="1" ${c > S.cash ? 'disabled' : ''}>+1<span class="sub">${money(c)}</span></button></div>`;
-      }).join('');
-    } else $('#squadMini').innerHTML = `<table class="table"><thead><tr><th>Employee</th><th class="num">Lvl</th><th class="num">Output/s</th><th></th></tr></thead><tbody>` +
-      S.squad.map(id => {
-        const out = memberOutput(id), c = levelCost(id);
-        return `<tr><td><div class="person">${avatar(id)}<div><div class="nm">${esc(PEOPLE[id].name)}</div><div class="bio">${band(PEOPLE[id].r)} ${D.ROLES[PEOPLE[id].role].name}</div></div></div></td>
-          <td class="num">${S.staff[id].lvl}</td><td class="num">${fmt(out)}<div class="bar thin"><div class="fill" style="width:${100 * out / total}%"></div></div></td>
-          <td class="num"><button class="btn sm" data-act="level" data-id="${id}" data-n="1" ${c > S.cash ? 'disabled' : ''}>+1 · ${money(c)}</button></td></tr>`;
-      }).join('') + '</tbody></table>';
-    const acts = actionable();
-    $('#upNext').innerHTML = acts.length
-      ? acts.map(a => `<li><span class="dotc ${a.count ? '' : 'ok'}"></span><a data-act="nav" data-view="${a.view}">${esc(a.text)}</a></li>`).join('')
-      : '<li class="muted">You\'re all caught up. Your squad has it handled.</li>';
-  }
-
-  VIEWS.team = () => {
-    const ids = owned().sort((a, b) => (S.squad.includes(b) - S.squad.includes(a)) || rawOutput(b) - rawOutput(a));
-    return `
-    <div class="page-head"><div><div class="muted small">${ids.length} people · squad ${S.squad.length}/${squadSlots()}</div><h1>Team</h1></div>
-      <div class="actions"><button class="btn" data-act="bestSquad">Best squad</button>${isUnlocked('assets') ? '<button class="btn" data-act="equipBest">Equip best assets</button>' : ''}<button class="btn primary" data-act="levelSquad">Level squad (best value)</button></div></div>
-    ${compact() ? `<div class="mcards">${ids.map(teamCard).join('')}</div>
-      <p class="muted small">Output doubles at level 10 and every 25 levels. Duplicate recruits promote people (+1★ = ×1.5 output and stronger passives).</p>` : `
-    <div class="card"><div class="table-wrap"><table class="table">
-      <thead><tr><th>Employee</th><th>Level band</th><th>Promotion</th><th class="num">Lvl</th><th class="num">Output/s</th><th>Passive (in squad)</th>${isUnlocked('assets') ? '<th>Assets</th>' : ''}<th>Status</th><th class="num">Level up</th><th></th></tr></thead>
-      <tbody>${ids.map(teamRow).join('')}</tbody></table></div>
-      <p class="muted small">Output doubles at level 10 and every 25 levels. Duplicate recruits promote people (+1★ = ×1.5 output and stronger passives).</p></div>`}`;
-  };
-  function teamCard(id) {
-    const p = PEOPLE[id], st = S.staff[id];
-    const inSquad = S.squad.includes(id), away = onMission(id);
-    const c1 = levelCost(id), c10 = levelCost(id, 10), mx = maxLevels(id);
-    return `<div class="mcard ${inSquad ? '' : 'dim'}">
-      <div class="mcard-top">${avatar(id)}<div class="grow"><div class="nm">${esc(p.name)}</div>
-        <div class="mcard-sub">${band(p.r)} ${D.ROLES[p.role].name} ${starsHtml(st.stars)}</div></div>
-        <span class="status ${away ? 'away' : inSquad ? 'squad' : 'bench'}">${away ? 'Away' : inSquad ? 'Squad' : 'Bench'}</span></div>
-      <div class="mcard-stats"><span>Lvl <b>${st.lvl}</b></span><span><b>${fmt(memberOutput(id))}</b>/s</span>
-        ${isUnlocked('assets') ? `<span>Assets <b>+${gearPct(id)}%</b></span>` : ''}<span>${D.ROLES[p.role].passiveText(Math.round(passiveOf(id)))}</span></div>
-      <div class="mcard-actions">
-        <button class="btn sm" data-act="level" data-id="${id}" data-n="1" ${c1 > S.cash ? 'disabled' : ''}>+1<span class="sub">${money(c1)}</span></button>
-        <button class="btn sm" data-act="level" data-id="${id}" data-n="10" ${c10 > S.cash ? 'disabled' : ''}>+10<span class="sub">${money(c10)}</span></button>
-        <button class="btn sm" data-act="level" data-id="${id}" data-n="max" ${mx < 1 ? 'disabled' : ''}>Max<span class="sub">+${mx}</span></button>
-        <button class="btn sm" data-act="squad" data-id="${id}" ${away ? 'disabled' : ''}>${inSquad ? 'Bench' : 'Squad'}<span class="sub">${inSquad ? 'remove' : 'add'}</span></button>
-      </div></div>`;
-  }
-  function teamRow(id) {
-    const p = PEOPLE[id], st = S.staff[id];
-    const inSquad = S.squad.includes(id), away = onMission(id);
-    const c1 = levelCost(id), c10 = levelCost(id, 10), mx = maxLevels(id);
-    const gear = Object.keys(D.GEAR).map(slot => {
-      const it = S.items.find(i => i.owner === id && i.slot === slot);
-      return it ? `<span class="r${it.r}" title="${esc(itemName(it))} +${it.pct}%">${D.GEAR[slot].short}</span>` : `<span class="muted" title="No ${D.GEAR[slot].name.toLowerCase()}">–</span>`;
-    }).join('');
-    return `<tr class="${inSquad ? '' : 'dim'}">
-      <td><div class="person">${avatar(id)}<div><div class="nm">${esc(p.name)}</div><div class="bio">${esc(p.bio)}</div></div></div></td>
-      <td>${band(p.r)}<div class="bio muted small">${D.ROLES[p.role].name}</div></td>
-      <td>${starsHtml(st.stars)}</td>
-      <td class="num">${st.lvl}</td>
-      <td class="num">${fmt(memberOutput(id))}</td>
-      <td class="small muted">${D.ROLES[p.role].passiveText(Math.round(passiveOf(id)))}</td>
-      ${isUnlocked('assets') ? `<td><div class="gearpips">${gear}</div></td>` : ''}
-      <td><span class="status ${away ? 'away' : inSquad ? 'squad' : 'bench'}">${away ? 'On engagement' : inSquad ? 'Squad' : 'Bench'}</span></td>
-      <td class="num"><div class="btns">
-        <button class="btn sm" data-act="level" data-id="${id}" data-n="1" ${c1 > S.cash ? 'disabled' : ''}>+1<span class="sub">${money(c1)}</span></button>
-        <button class="btn sm" data-act="level" data-id="${id}" data-n="10" ${c10 > S.cash ? 'disabled' : ''}>+10<span class="sub">${money(c10)}</span></button>
-        <button class="btn sm" data-act="level" data-id="${id}" data-n="max" ${mx < 1 ? 'disabled' : ''}>Max<span class="sub">+${mx}</span></button></div></td>
-      <td><button class="btn sm" data-act="squad" data-id="${id}" ${away ? 'disabled' : ''}>${inSquad ? 'Bench' : 'To squad'}</button></td></tr>`;
-  }
-
-  VIEWS.recruit = () => {
-    const w = D.RARITY.map((r, i) => r.weight * (i >= 2 ? 1 + 0.15 * RES('brand') : 1) * (i === 4 ? Math.pow(1.5, PERK('lucky')) : 1));
-    const tw = w.reduce((a, b) => a + b, 0);
-    const pull = S.lastPull.length ? `<div class="pull-results">${S.lastPull.map(x => {
-      const p = PEOPLE[x.id];
-      return `<div class="p r${p.r} ${p.r >= 3 ? 'hi' : ''}">${avatar(x.id)}<div><b>${esc(p.name)}</b><div>${x.kind === 'new' ? 'New hire!' : x.kind === 'star' ? `Promoted to ${S.staff[x.id].stars}★` : 'Max promotion: converted to patents'}</div></div></div>`;
-    }).join('')}</div>` : '<p class="muted">No candidates yet. Spend referrals to see who applies.</p>';
-    const dir = D.RARITY.map((r, ri) => D.PEOPLE.filter(p => p.r === ri).map(p => {
-      const st = S.staff[p.id];
-      return `<div class="p ${st ? '' : 'no'}">${avatar(p.id, !st)}<div><b>${esc(p.name)}</b><div>${band(ri)}</div><div class="muted">${st ? starsHtml(st.stars) + ' · Lvl ' + st.lvl : 'Not yet hired'}</div></div></div>`;
-    }).join('')).join('');
-    return `
-    <div class="page-head"><div><div class="muted small">${fmt(S.referrals)} referral${S.referrals === 1 ? '' : 's'} available</div><h1>Talent pipeline</h1></div>
-      <div class="actions"><button class="btn" data-act="recruit" data-n="1" ${S.referrals < 1 ? 'disabled' : ''}>Interview 1<span class="sub">1 referral</span></button>
-      <button class="btn primary" data-act="recruit" data-n="10" ${S.referrals < 10 ? 'disabled' : ''}>Interview 10<span class="sub">10 referrals</span></button></div></div>
-    <div class="grid2">
-      <div class="card"><div class="card-title">Latest candidates</div>${pull}</div>
-      <div class="card"><div class="card-title">Hiring odds</div>
-        <table class="table"><tbody>${D.RARITY.map((r, i) => `<tr><td>${band(i)}</td><td class="num">${(100 * w[i] / tw).toFixed(1)}%</td></tr>`).join('')}</tbody></table>
-        <p class="muted small">Staff or better guaranteed within <b>${25 - S.pity}</b> interviews. Principal guaranteed within <b>${80 - S.pityL}</b>.<br>
-        Referrals come from first-time launches, badges, OKRs, engagements and the occasional message.</p></div>
-    </div>
-    <div class="card"><div class="card-title">Directory <span class="muted small">${owned().length}/${D.PEOPLE.length} hired</span></div><div class="dir">${dir}</div></div>`;
-  };
-
-  VIEWS.assets = () => {
-    const spare = S.items.filter(i => !i.owner).sort((a, b) => b.pct - a.pct);
-    const rows = S.squad.map(id => `<tr><td><div class="person">${avatar(id)}<div class="nm">${esc(PEOPLE[id].name)}</div></div></td>${Object.keys(D.GEAR).map(slot => {
-      const it = S.items.find(i => i.owner === id && i.slot === slot);
-      return `<td>${it ? `<span class="r${it.r}">${esc(itemName(it))}</span><div class="muted small">+${it.pct}%</div>` : '<span class="muted">—</span>'}</td>`;
-    }).join('')}<td class="num">+${gearPct(id)}%</td></tr>`).join('');
-    return `
-    <div class="page-head"><div><div class="muted small">${S.items.length}/${MAX_ITEMS} assets · drop chance ${(C.drop * 100).toFixed(1)}% per blocker, guaranteed from launches</div><h1>IT assets</h1></div>
-      <div class="actions">${RES('autoequip') ? `<span class="toggle ${S.settings.autoEquip ? 'on' : ''}" data-act="setting" data-key="autoEquip"><span class="sw"></span>Auto-equip</span>` : ''}
-      <button class="btn" data-act="recycleAll">Recycle unassigned</button><button class="btn primary" data-act="equipBest">Equip best</button></div></div>
-    ${compact() ? `<div class="card-title" style="margin:4px 0 -4px">Squad equipment</div><div class="mcards">${S.squad.map(id => `<div class="mcard">
-      <div class="mcard-top">${avatar(id)}<div class="grow"><div class="nm">${esc(PEOPLE[id].name)}</div><div class="mcard-sub">+${gearPct(id)}% from assets</div></div></div>
-      <div class="mcard-slots">${Object.keys(D.GEAR).map(slot => {
-        const it = S.items.find(i => i.owner === id && i.slot === slot);
-        return it ? `<div class="r${it.r}" title="${esc(itemName(it))}">${esc(itemName(it))} <b>+${it.pct}%</b></div>` : `<div class="muted">No ${D.GEAR[slot].name.toLowerCase()}</div>`;
-      }).join('')}</div></div>`).join('')}</div>` : `
-    <div class="card"><div class="card-title">Squad equipment</div><div class="table-wrap"><table class="table">
-      <thead><tr><th>Employee</th>${Object.values(D.GEAR).map(g => `<th>${g.name}</th>`).join('')}<th class="num">Bonus</th></tr></thead><tbody>${rows}</tbody></table></div></div>`}
-    <div class="card"><div class="card-title">Unassigned <span class="muted small">${spare.length}</span></div>
-      ${spare.length && compact() ? `<div class="list">${spare.map(i => `<div class="li"><div class="grow"><b class="r${i.r}">${esc(itemName(i))}</b>
-        <div class="meta">${D.GEAR[i.slot].name} · ${D.RARITY[i.r].name} grade · +${i.pct}% · found on P${i.lvl}</div></div>
-        <button class="btn sm" data-act="recycle" data-item="${i.id}">Recycle<span class="sub">${money(itemValue(i) * C.cashBase)}</span></button></div>`).join('')}</div>`
-      : spare.length ? `<div class="table-wrap"><table class="table"><thead><tr><th>Asset</th><th>Type</th><th>Grade</th><th class="num">Bonus</th><th class="num">Found on</th><th></th></tr></thead><tbody>${spare.map(i => `
-        <tr><td class="r${i.r}">${esc(itemName(i))}</td><td>${D.GEAR[i.slot].name}</td><td>${band(i.r)}</td><td class="num">+${i.pct}%</td><td class="num">P${i.lvl}</td>
-        <td class="num"><button class="btn sm" data-act="recycle" data-item="${i.id}">Recycle · ${money(itemValue(i) * C.cashBase)}</button></td></tr>`).join('')}</tbody></table></div>`
-        : '<p class="muted">Nothing unassigned. Assets drop while your squad works.</p>'}
-      <p class="muted small">Assets add a percentage to the person using them. Higher projects drop stronger assets.</p></div>`;
-  };
-
-  VIEWS.engage = () => {
-    const slots = Array.from({ length: missionSlots() }, (_, i) => S.missions[i] || null);
-    const free = freeMissionSlot() >= 0, benchN = bench().length;
-    const slotHtml = slots.map((m, i) => {
-      if (!m) return `<div class="li"><div class="grow"><b>Slot ${i + 1}</b><div class="meta">Free. Pick an offer below.</div></div></div>`;
-      const done = now() >= m.end;
-      const pct = clamp((now() - m.start) / (m.end - m.start), 0, 1) * 100;
-      return `<div class="li ${done ? 'done' : ''}"><div class="grow"><b>${esc(m.offer.name)}</b>
-        <div class="meta">${m.staff.map(id => esc(PEOPLE[id].name)).join(', ')} · rating ${Math.round(m.factor * 100)}%</div>
-        <div class="bar thin"><div class="fill ${done ? 'green' : ''}" style="width:${pct}%"></div></div></div>
-        ${done ? `<button class="btn primary" data-act="collect" data-slot="${i}">Collect</button>` : `<span class="muted small nowrap">${fmtDur((m.end - now()) / 1000)} left</span>`}</div>`;
-    }).join('');
-    const offers = S.offers.map(o => `<div class="li"><div class="grow"><b>${esc(o.name)}</b>
-      <div class="meta">${fmtDur(o.dur)} · ${o.n} ${o.n > 1 ? 'people' : 'person'} · prefers ${D.ROLES[o.role].name}</div>
-      <div class="meta">≈ ${money(o.cash)} · ~${o.patents < 10 ? o.patents.toFixed(1) : Math.round(o.patents)} patents${o.referrals >= 0.3 ? ` · ~${o.referrals.toFixed(1)} referrals` : ''} · ${Math.round(o.gear * 100)}% asset</div></div>
-      <button class="btn" data-act="startOffer" data-offer="${o.id}" ${!free || benchN < o.n ? 'disabled' : ''}>Staff &amp; start</button></div>`).join('');
-    const cd = S.offersAt - now();
-    return `
-    <div class="page-head"><div><div class="muted small">${benchN} on the bench · staff come from people not in your squad</div><h1>Client engagements</h1></div>
-      <div class="actions">${RES('repeat') ? `<span class="toggle ${S.settings.autoRepeat ? 'on' : ''}" data-act="setting" data-key="autoRepeat"><span class="sw"></span>Auto-repeat</span>` : ''}
-      <button class="btn" data-act="refreshOffers" ${cd > 0 ? 'disabled' : ''}>${cd > 0 ? `New offers in ${fmtDur(cd / 1000)}` : 'Refresh offers'}</button></div></div>
-    <div class="card"><div class="card-title">Active</div><div class="list">${slotHtml}</div></div>
-    <div class="card"><div class="card-title">Offers</div><div class="list">${offers}</div>
-      <p class="muted small">Rewards scale with the staff's output versus what the client expects (shown as rating), +25% if someone has the preferred role.${benchN ? '' : ' <b>Your bench is empty</b>: recruit more people or take someone out of the squad.'}</p></div>`;
-  };
-
-  VIEWS.rnd = () => {
-    const lab = S.lab.map(l => {
-      const pct = clamp((now() - l.start) / (l.end - l.start), 0, 1) * 100;
-      return `<div class="li"><div class="grow"><b>${esc(RESEARCH[l.id].name)}</b> → level ${RES(l.id) + 1}<div class="bar thin"><div class="fill" style="width:${pct}%"></div></div></div><span class="muted small nowrap">${fmtDur((l.end - now()) / 1000)} left</span></div>`;
-    }).join('') || '<div class="li"><div class="grow muted">The lab is idle.</div></div>';
-    const items = D.RESEARCH.map(r => {
-      const lvl = RES(r.id), maxed = lvl >= r.max, busy = S.lab.some(l => l.id === r.id);
-      const cost = maxed ? 0 : r.cost(lvl);
-      return `<div class="li ${maxed ? 'done' : ''}"><div class="grow"><b>${esc(r.name)}</b> <span class="muted small">${r.max > 1 ? `level ${lvl}/${r.max}` : maxed ? 'done' : ''}</span>
-        <div class="meta">${esc(r.desc)}</div></div>
-        ${maxed ? '<span class="good small">✓ Complete</span>' : `<button class="btn" data-act="research" data-id="${r.id}" ${busy || S.patents < cost || S.lab.length >= labSlots() ? 'disabled' : ''}>${busy ? 'In progress' : `Start · ${cost} patents`}<span class="sub">${fmtDur(r.time(lvl))}</span></button>`}</div>`;
-    }).join('');
-    return `
-    <div class="page-head"><div><div class="muted small">${fmt(S.patents)} patents · ${S.lab.length}/${labSlots()} lab${labSlots() > 1 ? 's' : ''} busy</div><h1>R&amp;D</h1></div></div>
-    <div class="card"><div class="card-title">In the lab</div><div class="list">${lab}</div></div>
-    <div class="card"><div class="card-title">Programmes</div><div class="list">${items}</div>
-    <p class="muted small">Research is permanent. It survives IPOs and keeps running while you're away.</p></div>`;
-  };
-
-  VIEWS.okr = () => {
-    const okrs = isUnlocked('okr') ? S.okr.list.map((o, i) => {
-      const def = OKR_BY_ID[o.id], p = okrProgress(o);
-      return `<div class="li ${o.claimed ? 'done' : ''}"><div class="grow"><b>${esc(def.text(o.target))}</b>
-        <div class="bar thin"><div class="fill ${p >= o.target ? 'green' : ''}" style="width:${100 * p / o.target}%"></div></div>
-        <div class="meta">${fmt(p)} / ${fmt(o.target)}</div></div>
-        ${o.claimed ? '<span class="good small">✓ Claimed</span>' : `<button class="btn ${p >= o.target ? 'primary' : ''}" data-act="claimOkr" data-i="${i}" ${p < o.target ? 'disabled' : ''}>Claim</button>`}</div>`;
-    }).join('') : `<div class="li locked"><div class="grow">Daily OKRs unlock at project ${D.UNLOCKS.okr}.</div></div>`;
-    const badges = ACH.map(a => `<div class="badgec ${S.achievements[a.id] ? 'yes' : 'no'}"><b>${esc(a.name)}</b><span class="muted">${esc(a.desc)}</span></div>`).join('');
-    return `
-    <div class="page-head"><div><div class="muted small">${isUnlocked('okr') ? `Resets at midnight · streak ${S.streak} day${S.streak === 1 ? '' : 's'}` : ''}</div><h1>OKRs &amp; badges</h1></div></div>
-    <div class="card"><div class="card-title">Today's OKRs</div><div class="list">${okrs}</div>
-      <p class="muted small">Each OKR: +3 referrals (and +3 patents once R&amp;D is open). All three: a streak bonus of 5–12 referrals.</p></div>
-    <div class="card"><div class="card-title">Badges <span class="muted small">${Object.keys(S.achievements).length}/${ACH.length} · each +2% team output</span></div><div class="badges">${badges}</div></div>`;
-  };
-
-  VIEWS.board = () => {
-    const gain = sharesOnIpo();
-    const perks = D.PERKS.map(p => {
-      const lvl = PERK(p.id), maxed = lvl >= p.max, cost = maxed ? 0 : p.cost(lvl);
-      return `<div class="li ${maxed ? 'done' : ''}"><div class="grow"><b>${esc(p.name)}</b> <span class="muted small">${p.max > 1 && p.max < 999 ? `${lvl}/${p.max}` : p.max === 999 ? `level ${lvl}` : maxed ? 'owned' : ''}</span><div class="meta">${esc(p.desc)}</div></div>
-        ${maxed ? '<span class="good small">✓</span>' : `<button class="btn" data-act="perk" data-id="${p.id}" ${S.shares < cost ? 'disabled' : ''}>${cost} share${cost > 1 ? 's' : ''}</button>`}</div>`;
-    }).join('');
-    return `
-    <div class="page-head"><div><div class="muted small">${fmt(S.shares)} shares · ${S.ipos} IPO${S.ipos === 1 ? '' : 's'} so far</div><h1>Board &amp; IPO</h1></div></div>
-    <div class="grid2">
-      <div class="card"><div class="card-title">Initial public offering</div>
-        <p>Highest project this run: <b>${S.maxStageRun}</b>. Going public now would raise <b>${gain} share${gain === 1 ? '' : 's'}</b>.</p>
-        <p class="muted small">Shares = ((highest project − 50) ÷ 5)<sup>1.7</sup>, from project ${D.UNLOCKS.board}. You restart at project 1 with your people, promotions, assets and research.</p>
-        <button class="btn primary" data-act="ipo" ${gain < 1 ? 'disabled' : ''}>Ring the bell</button></div>
-      <div class="card"><div class="card-title">Board perks</div><div class="list">${perks}</div></div>
-    </div>`;
-  };
-
-  VIEWS.rank = () => `
-    <div class="page-head"><div><div class="muted small" id="lbSource"></div><h1>Rankings</h1></div>
-      <div class="actions"><button class="btn" data-act="lbRefresh">Refresh</button><button class="btn primary" data-act="lbSubmit">Submit my numbers</button></div></div>
-    <div class="card"><div class="table-wrap"><table class="table rank"><thead><tr><th>#</th><th>Name</th><th class="num">Highest project</th><th>Details</th></tr></thead><tbody id="lbBody"><tr><td colspan="4" class="muted">Loading…</td></tr></tbody></table></div></div>`;
-
-  VIEWS.settings = () => `
-    <div class="page-head"><div><h1>Settings</h1></div></div>
-    <div class="card">
-      <label class="field">Display name<input id="setName" maxlength="20" value="${esc(S.name)}" placeholder="Your name" autocomplete="off"></label>
-      <div class="row"><span class="toggle ${S.settings.stealth ? 'on' : ''}" data-act="setting" data-key="stealth"><span class="sw"></span>Stealth mode (no colours, animations or floating numbers)</span></div>
-      <div class="row"><span class="toggle ${S.settings.badge ? 'on' : ''}" data-act="setting" data-key="badge"><span class="sw"></span>Show a task count in the tab title and on the app icon, e.g. "(2) Atlas Workforce"</span></div>
-      ${RES('autolevel') ? `<div class="row"><span class="toggle ${S.settings.autoLevel ? 'on' : ''}" data-act="setting" data-key="autoLevel"><span class="sw"></span>Auto-level squad (Process automation)</span></div>` : ''}
-    </div>
-    <div class="card"><div class="card-title">Play on another device</div>
-      <p class="small" style="margin-top:0">Send yourself a link that carries this save, then open it on your phone or computer to carry on from here.
-        Whichever device opens the link takes over this progress.</p>
-      <div class="row"><button class="btn primary" data-act="transferCopy">Copy transfer link</button>
-        ${navigator.share ? '<button class="btn" data-act="transferShare">Share…</button>' : ''}
-        ${isStandalone() ? '' : '<button class="btn" data-act="install">Install as an app</button>'}</div>
-      <textarea id="transferBox" class="hidden" rows="3" readonly></textarea>
-      <label class="field" style="max-width:none">Got a link from your other device? Paste it here:
-        <textarea id="importBox" rows="2" placeholder="https://…#transfer=…" autocomplete="off"></textarea></label>
-      <div class="row" style="margin-top:0"><button class="btn" data-act="transferImport">Import progress</button></div>
-    </div>
-    <div class="card"><div class="card-title">Backup</div>
-      <div class="row"><button class="btn" data-act="export">Export save</button><button class="btn" data-act="import">Import save</button><button class="btn danger" data-act="reset">Hard reset</button></div>
-      <textarea id="saveBox" class="hidden" rows="4" placeholder="Paste a save here, then press Import again"></textarea>
-      <p class="muted small">Progress saves on this device every few seconds.${compact() ? ' Tap ⧉ at the top for the report view.' : ' Keys: <b>Space</b> assist · <b>1</b> all-hands · <b>2</b> pizza · <b>Esc</b> or <b>`</b> report view.'}</p>
-    </div>`;
-
-  let pointerDown = false;
-  function renderView(force) {
-    const root = $('#view');
-    if (!force && (pointerDown || (document.activeElement && root.contains(document.activeElement) && /INPUT|TEXTAREA/.test(document.activeElement.tagName)))) return;
-    if (!force && (view === 'rank' || view === 'settings')) return;
-    if (view === 'overview' && !force && $('#pjCard')) { updateOverviewSlow(); return; }
-    const y = window.scrollY;
-    root.innerHTML = VIEWS[view]();
-    if (view === 'overview') { updateOverview(); updateOverviewSlow(); }
-    if (view === 'rank' && force) refreshLeaderboard();
-    if (!force) window.scrollTo(0, y);
-  }
-
-  async function refreshLeaderboard() {
-    const { source, rows } = await window.Leaderboard.top(GAME_ID, 'desc', 30);
-    const src = $('#lbSource');
-    if (!src) return;
-    src.textContent = source === 'server' ? 'Live org-wide rankings' : 'Showing this browser only (no ranking server reachable)';
-    $('#lbBody').innerHTML = rows.map((r, i) => `<tr class="${r.name === S.name ? 'me' : ''}"><td>${i + 1}</td><td>${esc(r.name)}</td><td class="num">${fmt(r.score)}</td><td class="muted">${esc(r.meta || '')}</td></tr>`).join('')
-      || '<tr><td colspan="4" class="muted">No submissions yet.</td></tr>';
-  }
-  async function submitScore() {
-    if (!S.name) { go('settings'); toast('Set a display name first'); return; }
-    const where = await window.Leaderboard.submit(GAME_ID, S.name, S.maxStage, `${owned().length} hired · ${S.ipos} IPO${S.ipos === 1 ? '' : 's'}`, 'desc');
-    toast(where === 'server' ? 'Submitted to org rankings' : 'Saved locally (no ranking server reachable)');
-    refreshLeaderboard();
+        $('#meAvatar').innerHTML = A.avatar(myLook());
+        applySettings();
+        toast('Progress imported. Your team is back at work.');
+        go('home');
+      });
   }
 
   // ================================================================ actions
@@ -1392,100 +864,102 @@
   const ACTIONS = {
     nav: d => go(d.view),
     more: () => ($('#sheet').classList.contains('hidden') ? openSheet() : closeSheet()),
-    lockedTab: d => toast(`${VIEW_LABEL[d.view]} unlocks at project ${D.UNLOCKS[TABS.find(t => t[0] === d.view)[2]]}`),
     decoy: () => { closeSheet(); toggleDecoy(); },
+    closeDialog: () => closeDialog(),
+    confirmOk: () => { const cb = confirmCb; confirmCb = null; closeDialog(); if (cb) cb(); },
+    start: d => {
+      const w = E.start(d.offer);
+      if (!w) return toast('No free workstream or nobody available');
+      save();
+      toast(`${w.offer.name} started · ${fmtDur(w.offer.dur)}`);
+      renderNav();
+      renderView(true);
+    },
+    signoff: d => signOffSlots([+d.slot]),
+    signoffAll: () => signOffSlots(E.ready()),
+    revealNext: () => { if (reveal) showReview(reveal.results, reveal.idx + 1); },
+    revealAll: () => { if (reveal) { const rest = reveal.results.slice(reveal.idx + 1); reveal = null; if (rest.length === 1) showReview(rest, 0); else showSummary(rest); } },
+    refresh: () => { if (E.refreshOffers()) { save(); renderView(true); } },
+    answer: d => {
+      const res = E.answer(+d.msg, +d.i);
+      if (res && res.error === 'funds') return toast('Not enough budget');
+      save();
+      if (res && res.pending) toast('Decision made. You will hear back soon.');
+      renderNav();
+      renderView(true);
+    },
+    react: d => { E.react(+d.msg, d.e); save(); renderView(true); },
+    profile: d => showProfile(d.id),
+    chat: d => {
+      const before = E.hearts(d.id);
+      const res = E.coffeeChat(d.id);
+      if (!res) return;
+      save();
+      const p = E.PEOPLE[d.id];
+      showProfile(d.id, { said: pick([p.catch, ...p.banter]), heartUp: res.hearts > before });
+      buzz(15);
+    },
+    interview: d => {
+      const res = E.interview(+d.n);
+      if (!res) return;
+      save();
+      showHires(res);
+    },
+    flip: d => flip(+d.i),
+    flipAll: () => hires.forEach((_, i) => setTimeout(() => flip(i), S.settings.stealth ? 0 : i * 260)),
+    build: d => {
+      if (!E.build(d.id)) return;
+      save();
+      toast(`🏗️ Building ${E.OFFICE[d.id].name} · ${fmtDur((S.builds[S.builds.length - 1].end - now()) / 1000)}`);
+      renderView(true);
+    },
+    setting: d => { S.settings[d.key] = !S.settings[d.key]; applySettings(); save(); renderView(true); },
     install: () => { closeSheet(); promptInstall(); },
-    dismissInstall: () => { S.settings.installHint = false; renderView(true); },
+    dismissInstall: () => { S.settings.installHint = false; save(); renderView(true); },
     transferCopy: () => {
       if (!packed) { refreshPacked(); return toast('Preparing your link… tap again in a second'); }
       const url = transferUrl(packed);
-      const showBox = () => {
-        const box = $('#transferBox');
-        box.classList.remove('hidden');
-        box.value = url;
-        box.focus();
-        box.select();
-        toast('Copy the link from the box below');
-      };
-      if (navigator.clipboard && window.isSecureContext) {
-        navigator.clipboard.writeText(url).then(() => toast('Transfer link copied. Open it on your other device.'), showBox);
-      } else showBox();
+      const showBox = () => { const box = $('#transferBox'); box.classList.remove('hidden'); box.value = url; box.focus(); box.select(); toast('Copy the link from the box below'); };
+      if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(url).then(() => toast('Transfer link copied. Open it on your other device.'), showBox);
+      else showBox();
     },
     transferShare: () => {
       if (!packed) { refreshPacked(); return toast('Preparing your link… tap again in a second'); }
       navigator.share({ title: 'Atlas Workforce', text: 'Continue in Atlas Workforce', url: transferUrl(packed) }).catch(() => {});
     },
-    transferImport: () => importCode($('#importBox').value).catch(() => toast('That doesn\'t look like a complete transfer link')),
-    ping: () => answerPing(),
-    assist: (d, ev) => assist(ev),
-    allhands: () => allHands(),
-    pizza: () => pizza(),
-    attempt: () => attemptLaunch(),
-    autoAdvance: () => { S.autoAdvance = !S.autoAdvance; if (S.autoAdvance && S.farming && canBeatBoss()) attemptLaunch(); },
-    level: d => { levelUp(d.id, d.n === 'max' ? 'max' : Number(d.n)); renderView(true); },
-    levelSquad: () => { const n = levelSquadGreedy(); toast(n ? `Approved ${n} level-ups` : 'Nothing affordable yet'); renderView(true); },
-    bestSquad: () => { bestSquad(); if (RES('autoequip') && S.settings.autoEquip) equipBest(); renderView(true); },
-    squad: d => { toggleSquad(d.id); renderView(true); },
-    recruit: d => { recruit(Number(d.n)); renderView(true); },
-    equipBest: () => { equipBest(); toast('Assets reassigned'); renderView(true); },
-    recycle: d => { recycle(Number(d.item)); renderView(true); },
-    recycleAll: () => { recycleAll(); renderView(true); },
-    startOffer: d => { startOffer(d.offer); renderView(true); },
-    collect: d => { collectMission(Number(d.slot)); checkAchievements(); renderView(true); },
-    refreshOffers: () => { if (now() < S.offersAt) return; compute(); S.offers = []; ensureOffers(); S.offersAt = now() + 30 * 60000; renderView(true); },
-    research: d => { startResearch(d.id); renderView(true); },
-    claimOkr: d => { claimOkr(Number(d.i)); renderView(true); },
-    ipo: () => ipo(),
-    perk: d => { buyPerk(d.id); renderView(true); },
-    lbRefresh: () => refreshLeaderboard(),
-    lbSubmit: () => submitScore(),
-    setting: d => { S.settings[d.key] = !S.settings[d.key]; if (d.key === 'autoEquip' && S.settings.autoEquip) equipBest(); applySettings(); renderView(true); },
-    export: () => {
-      const box = $('#saveBox');
-      box.classList.remove('hidden');
-      box.value = btoa(unescape(encodeURIComponent(JSON.stringify(S))));
-      box.select();
-      toast('Save copied into the box below');
+    transferImport: () => importCode($('#importBox').value).catch(() => toast("That doesn't look like a complete transfer link")),
+    reset: () => confirmDialog('Reset everything?', '<p>This deletes your team, office, badges and career on this device.</p>', 'Reset', () => {
+      S = E.fresh();
+      save();
+      go('home');
+      askName();
+    }),
+    saveName: () => {
+      const v = ($('#nameInput').value || '').trim().slice(0, 20);
+      S.name = v;
+      save();
+      $('#meAvatar').innerHTML = A.avatar(myLook());
+      closeDialog();
     },
-    import: () => {
-      const box = $('#saveBox');
-      if (box.classList.contains('hidden') || !box.value.trim()) { box.classList.remove('hidden'); box.value = ''; box.focus(); return; }
-      try {
-        S = hydrate(JSON.parse(decodeURIComponent(escape(atob(box.value.trim())))));
-        if (!S.blocker) spawn();
-        save();
-        toast('Save imported');
-        go('overview');
-      } catch { toast('That save looks corrupted'); }
-    },
-    reset: () => modal('Hard reset?', '<p>This deletes everything: people, research, badges and shares.</p>', () => {
-      S = fresh(); spawn(); save(); go('overview');
-    }, true),
   };
 
-  function applySettings() {
-    document.body.classList.toggle('stealth', S.settings.stealth);
+  const myLook = () => ({ skin: 2, hair: 'short', hc: '#3a2b20', top: '#005f73', topStyle: 'collar', bg: '#e3f1f4', mouth: 'smile' });
+
+  function askName() {
+    openDialog(`<div class="profile-head">${av('dana', 'xl')}<div><div class="muted small">Dana Okafor · VP Delivery</div><h3>Welcome to Atlas!</h3></div></div>
+      <p>I'm Dana, your manager. You're taking over a small team. They do the work; you make the calls. It runs in real time, so check in whenever suits you.</p>
+      <label class="field" style="max-width:none">What should the team call you?<input id="nameInput" maxlength="20" placeholder="Your first name" autocomplete="off"></label>
+      <div class="actions"><button class="btn primary" data-act="saveName">Let's go</button></div>`);
+    setTimeout(() => { const i = $('#nameInput'); if (i && !compact()) i.focus(); }, 50);
   }
+
+  function applySettings() { document.body.classList.toggle('stealth', !!S.settings.stealth); }
 
   function toggleDecoy() {
     const d = $('#decoy');
     const show = d.classList.contains('hidden');
     d.classList.toggle('hidden', !show);
-    if (show) {
-      bump('panics');
-      hidePing();
-      document.title = 'Performance Calibration · Atlas Workforce';
-      checkAchievements();
-    } else updateTitle();
-  }
-
-  function updateTitle() {
-    if (!$('#decoy').classList.contains('hidden')) return;
-    const n = actionable().filter(a => a.count).length;
-    $('#bellCount').textContent = n;
-    $('#bellCount').classList.toggle('hidden', !n);
-    document.title = (S.settings.badge && n ? `(${n}) ` : '') + 'Atlas Workforce';
-    setAppBadge(S.settings.badge ? n : 0);
+    if (show) { E.panic(); document.title = 'Performance Calibration · Atlas Workforce'; hideCoach(); } else updateTitle();
   }
 
   function bind() {
@@ -1498,114 +972,111 @@
       if (fn) fn(el.dataset, e);
     });
     document.addEventListener('input', e => {
-      if (e.target.id === 'setName') { S.name = e.target.value.trim().slice(0, 20); $('#meAvatar').textContent = initials(S.name || '?'); }
+      if (e.target.id === 'setName') { S.name = e.target.value.trim().slice(0, 20); save(); }
     });
-    $('#modalOk').addEventListener('click', () => closeModal(true));
-    $('#modalCancel').addEventListener('click', () => closeModal(false));
-    $('#modal').addEventListener('click', e => { if (e.target.id === 'modal') closeModal(false); });
+    $('#overlay').addEventListener('click', e => { if (e.target.id === 'overlay' && !reveal) closeDialog(); });
     $('#sheet').addEventListener('click', e => { if (e.target.id === 'sheet') closeSheet(); });
     $('#decoy').addEventListener('dblclick', toggleDecoy);
     const onResize = () => renderView(true);
-    if (phoneQuery.addEventListener) phoneQuery.addEventListener('change', onResize);
-    else phoneQuery.addListener(onResize);
+    if (phoneQuery.addEventListener) phoneQuery.addEventListener('change', onResize); else phoneQuery.addListener(onResize);
+    window.addEventListener('resize', updateCoach);
+    window.addEventListener('scroll', updateCoach, { passive: true });
     window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); installEvent = e; });
-    window.addEventListener('appinstalled', () => {
-      installEvent = null;
-      S.settings.installHint = false;
-      toast('Installed. Open Workforce from your home screen.');
-      renderView(true);
-    });
+    window.addEventListener('appinstalled', () => { installEvent = null; S.settings.installHint = false; toast('Installed. Open Workforce from your home screen.'); });
     document.addEventListener('keydown', e => {
       if (e.key === 'Escape' && !$('#sheet').classList.contains('hidden')) { closeSheet(); return; }
-      if (e.key === 'Escape' || e.key === '`') {
-        if (!$('#modal').classList.contains('hidden') && e.key === 'Escape') { closeModal(false); return; }
-        e.preventDefault(); toggleDecoy(); return;
-      }
-      if (!$('#decoy').classList.contains('hidden')) return;
-      if (/INPUT|TEXTAREA/.test(document.activeElement.tagName)) return;
-      if (e.key === 'Enter' && !$('#modal').classList.contains('hidden')) { closeModal(true); return; }
-      if (document.activeElement.tagName === 'BUTTON') document.activeElement.blur();
-      if (e.code === 'Space' && !e.repeat) { e.preventDefault(); assist(); }
-      if (e.key === '1') allHands();
-      if (e.key === '2') pizza();
+      if (e.key === 'Escape' && !$('#overlay').classList.contains('hidden')) { closeDialog(); return; }
+      if ((e.key === 'Escape' || e.key === '`') && !/INPUT|TEXTAREA/.test(document.activeElement.tagName)) { e.preventDefault(); toggleDecoy(); return; }
+      if (e.key === 'Enter' && document.activeElement && document.activeElement.id === 'nameInput') ACTIONS.saveName();
     });
     window.addEventListener('beforeunload', save);
-    document.addEventListener('visibilitychange', () => { if (document.hidden) save(); });
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) save();
+      else { E.tick(); drainEvents(); renderNav(); renderView(true); }
+    });
   }
 
-  // ================================================================ loop
+  // ================================================================ loop & boot
 
-  let last = now(), ticks = 0;
+  let ticks = 0;
   function tick() {
-    const t = now();
-    const dt = (t - last) / 1000;
-    last = t;
-    if (dt > 10) {
-      // Background tabs get throttled hard; treat long gaps like time away.
-      offlineGain(dt, dt > 600);
-    } else {
-      compute();
-      damage(C.dps * dt);
-      if (S.blocker.boss && t > S.blocker.deadline && S.blocker.hp > 0) failBoss();
+    E.tick();
+    drainEvents();
+    const readyNow = E.ready().join(',');
+    if (readyNow !== lastReadyToast) {
+      if (readyNow.length > lastReadyToast.length && document.visibilityState === 'visible' && view !== 'home' && view !== 'projects') toast('✅ A project is ready for sign-off');
+      lastReadyToast = readyNow;
     }
-    maybePing();
-    if (view === 'overview') updateOverview();
-    if (++ticks % 10 === 0) {
-      processMissions();
-      processLab();
-      ensureOkrs();
-      if (RES('autolevel') && S.settings.autoLevel) levelSquadGreedy(100);
-      if (isUnlocked('engage')) ensureOffers();
-      checkAchievements();
-      if (!pointerDown) renderNav();
-      renderView(false);
+    if (readyNow !== lastReady) {
+      renderNav();
+      if (renderView()) lastReady = readyNow;
+    }
+    live();
+    if (++ticks % 5 === 0) {
+      updateFloors();
+      renderNav();
+      if (view !== 'inbox' || ticks % 15 === 0) renderView();
       updateTitle();
     }
-    if (ticks % 50 === 0) {
-      save();
-      if (view === 'settings') refreshPacked();
-    }
+    if (ticks % 10 === 0) save();
+    if (ticks % 30 === 0 && view === 'settings') refreshPacked();
   }
 
-  // ================================================================ boot
-
   function boot() {
+    let fresh = true;
+    try { fresh = !(localStorage.getItem(SAVE_KEY) || localStorage.getItem(OLD_KEY)); } catch { /* storage blocked */ }
+    loadSave();
     applySettings();
-    $('#meAvatar').textContent = initials(S.name || '?');
-    compute();
-    if (!S.blocker) spawn();
-    checkUnlocks(true);
-    if (isUnlocked('engage')) ensureOffers();
-    ensureOkrs();
-    bind();
-    // A transfer link (#transfer=…) carries a save from another device; strip it so a reload doesn't re-import.
+    $('#meAvatar').innerHTML = A.avatar(myLook());
     const transfer = location.hash.startsWith('#transfer=') ? location.hash : null;
     if (transfer) history.replaceState(null, '', location.pathname + location.search);
+
+    // Catch up on time away and summarise it.
     const away = (now() - S.lastSeen) / 1000;
-    if (away > 60) offlineGain(away, !transfer);
-    else if (S.stats.blockers === 0 && !transfer) {
-      modal('Welcome to Atlas Workforce',
-        `<p>You manage a small squad. They clear blockers on client projects by themselves, earning revenue.</p>
-         <ul><li>Spend revenue on <b>level-ups</b> (Team, or the +1 buttons on the ${compact() ? 'Home tab' : 'Overview'}).</li>
-         <li>Every 5th project ends in a timed <b>launch</b>. If you miss it, the squad regroups and tries again when it's ready.</li>
-         <li>More of the company unlocks as you go. Check back now and then.</li></ul>
-         <p class="muted small">${compact() ? 'Tap <b>⧉</b> at the top any time' : 'Press <b>Esc</b> any time'} for a very boring report.</p>`);
-    }
-    log('Signed in. Your squad is on it.');
+    const before = { office: JSON.stringify(S.office), inbox: S.inbox.length };
+    E.tick();
+    pendingEvents.length = 0;
+    lastReady = lastReadyToast = E.ready().join(',');
+    bind();
     renderNav();
     renderView(true);
     updateTitle();
-    setInterval(tick, 100);
+    setInterval(tick, 1000);
+
     if (transfer) importCode(transfer).catch(() => toast('That transfer link looks incomplete. Try copying it again.'));
-    if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
-      navigator.serviceWorker.register('sw.js').catch(() => { /* offline support is a bonus */ });
+    else if (fresh || S.tut === 0 && !S.name) askName();
+    else if (away > 10 * 60) {
+      const ready = E.ready().length;
+      const newMsgs = S.inbox.length - before.inbox;
+      const built = JSON.stringify(S.office) !== before.office;
+      const auto = S.autoSummary;
+      S.autoSummary = null;
+      const lines = [];
+      if (auto) lines.push(`🤖 Autopilot delivered <b>${auto.count}</b> project${auto.count > 1 ? 's' : ''} (avg ${(auto.stars / auto.count).toFixed(1)}★, +${money(auto.cash)})`);
+      if (ready) lines.push(`✅ <b>${ready}</b> deliver${ready > 1 ? 'ies' : 'y'} waiting for your sign-off`);
+      if (newMsgs > 0) lines.push(`💬 <b>${newMsgs}</b> new message${newMsgs > 1 ? 's' : ''}`);
+      if (built) lines.push('🏗️ Office construction finished');
+      if (lines.length) {
+        openDialog(`<h3>Welcome back${S.name ? ', ' + esc(S.name) : ''}!</h3><p class="muted small">You were away ${fmtDur(away)}.</p>
+          <div class="extras">${lines.map(l => `<div class="extra"><span>${l}</span></div>`).join('')}</div>
+          <div class="actions">${ready ? '<button class="btn" data-act="closeDialog">Later</button><button class="btn primary" data-act="signoffAll">Sign off now</button>' : '<button class="btn primary" data-act="closeDialog">Okay</button>'}</div>`);
+      }
     }
+    if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) navigator.serviceWorker.register('sw.js').catch(() => {});
     if (/[?&]debug/.test(location.search)) {
       window.WF = {
-        state: () => S,
-        warp: sec => { S.lastSeen -= sec * 1000; for (const m of S.missions) if (m) { m.start -= sec * 1000; m.end -= sec * 1000; } for (const l of S.lab) { l.start -= sec * 1000; l.end -= sec * 1000; } offlineGain(sec, false); },
-        give: (cash = 0, refs = 0, pats = 0, shares = 0) => { S.cash += cash; S.referrals += refs; S.patents += pats; S.shares += shares; },
-        stage: n => { S.stage = n; S.maxStage = Math.max(S.maxStage, n); S.maxStageRun = Math.max(S.maxStageRun, n); S.wave = 1; spawn(); checkUnlocks(true); },
+        E, get S() { return E.state; },
+        warp: sec => {
+          const s = E.state, ms = sec * 1000;
+          s.lastSeen -= ms; s.lastTick -= ms;
+          for (const w of s.ws) if (w) { w.start -= ms; w.end -= ms; }
+          for (const b of s.builds) { b.start -= ms; b.end -= ms; }
+          for (const r of s.risks) r.at -= ms;
+          s.nextMsgAt -= ms;
+          if (s.league) { s.league.start -= ms; s.league.end -= ms; }
+          tick();
+        },
+        give: (cash = 0, refs = 0) => { E.state.cash += cash; E.state.referrals += refs; },
       };
     }
   }

@@ -4,7 +4,7 @@ Games that look like work. Each one has a **boss key** that swaps it for somethi
 
 | Game | Looks like | Actually is | Boss key |
 |---|---|---|---|
-| ⭐ **Atlas Workforce** (`docs/workforce`) | An HR system (Workday-style) | **The long-haul idle RPG.** Collect 25 employees through gacha recruiting and promote duplicates. Your squad auto-clears projects and timed launch bosses. Has gear, timed client engagements, an R&D tree with automation, daily OKRs with streaks, 47 badges, an IPO prestige loop with board perks, offline progress, a task count in the tab title, and a phone layout you can install as an app | `Esc` or `` ` `` → performance calibration report |
+| ⭐ **Atlas Workforce** (`docs/workforce`) | An HR system (Workday-style) | **The long-haul idle game.** Staff real-time client projects (2 min to 8 h) with 25 illustrated characters who have moods, traits, friendships and backstories. Answer their inbox decisions, sign off deliveries to see a star-by-star client review, and hire through a résumé reveal. Keep a daily commitment streak, climb a weekly manager league, and raise funding rounds that open up your office floor plan. Progress continues offline, and the phone layout installs as an app | `Esc` or `` ` `` → performance calibration report |
 | **Atlas Delivery Tracker** (`docs/tracker`) | A Jira-style sprint board | Idle RPG/clicker: tickets are enemies, story points are HP, promotions are levels. Has upgrades, abilities, prestige ("reorgs"), 31 achievements, offline progress and a leaderboard | `Esc` or `` ` `` → quarterly business review |
 | **FY26 Budget Workbook** (`docs/workbook`) | An Excel workbook | Minesweeper: hidden cells show fake figures, mines are `#REF!`, flags are `#N/A`, best times go on an "Approvals" sheet | `Esc` → every cell shows plain numbers, timer pauses |
 | **lintcheck** (`terminal/lintcheck.py`) | A CI token validator | Wordle. Same daily word for everyone in the office, plus practice mode, stats and a shareable grid | `:q` or `Ctrl+C` → a screen of passing tests |
@@ -15,7 +15,7 @@ No accounts, trackers or third-party scripts. The web games are plain HTML/JS in
 
 ## Play on your phone
 Once GitHub Pages is on (see **Deploy**), open **https://goshuajoh.github.io/OfficeShenanigans/workforce/** on your phone.
-- **Phone layout:** a bottom tab bar (Home · Team · Hire · Clients · More), cards instead of wide tables, and a big **Assist** button. **⧉** at the top flips to the boring report.
+- **Phone layout:** a bottom tab bar (Home · Projects · Inbox · Team · More), with dialogs that slide up from the bottom. **⧉** at the top flips to the boring report.
 - **Install it:** tap **Install** on the Home tab. On iPhone use Safari → Share → **Add to Home Screen**; on Android use ⋮ → **Install app**. It runs full-screen, works offline, and can show a task count on its icon.
 - **Move your progress between computer and phone:** Settings → **Play on another device** → *Copy transfer link* (or *Share…*), then open the link on the other device. Inside the installed iPhone app, paste the link into the box on the same screen instead. The iPhone home-screen app keeps its own save, separate from Safari.
 - The spreadsheet Minesweeper works on phones too: tap to open, long-press (or switch on **⚑ Mark #N/A**) to flag, and tap the file name at the top to hide the game.
@@ -79,13 +79,15 @@ Deploy the server (Option B), then set `leaderboardUrl` in `docs/config.js` to i
 
 ## Game notes
 
-**Atlas Workforce** is built to run all day in a background tab or on your phone. Check in every 15–60 minutes, spend a minute, and leave.
-- **Core loop:** your squad clears blockers automatically and earns revenue, which you spend on level-ups. Output doubles at level 10 and every 25 levels. Every 5th project ends in a timed **launch**. If the squad misses it, they farm the earlier phases and retry when they're strong enough.
-- **Unlocks as you climb:** Talent pipeline (P5), IT assets (P10), Client engagements (P15), R&D (P25), daily OKRs (P30), Board & IPO (P60).
-- **Recruiting:** referrals buy interviews. There are 5 rarity bands (Intern → Principal) with pity timers. Duplicates add promotion stars (×1.5 output each, up to 5★). Role passives (Engineering, Reliability, Product, Sales, Design) make squad composition matter.
-- **Come-back hooks:** engagements run 5 min–8 h; R&D projects run up to 8 h; OKRs reset daily; message pings give bonuses. The tab title shows "(n) Atlas Workforce" when something needs you, which looks like an inbox count.
-- **Low-effort automation:** R&D unlocks auto-levelling, auto-equip and auto-repeating engagements. Progress continues offline (8 h cap by default, upgradeable).
-- **Prestige:** from project 60, an IPO resets the run for shares. Shares buy permanent perks: multipliers, keeping a share of levels, a second lab, an extra squad slot and better recruiting odds.
+**Atlas Workforce** runs all day in a background tab or on your phone. Check in when you like, spend a minute, and leave.
+- **Guidance:** Dana, your manager, walks you through the first session with highlighted steps. After that, the card at the top of Home always shows the one thing worth doing next.
+- **Core loop:** pick a client offer. It shows who's recommended and the chance of a 4★+ review; tap Start. Work runs in real time, from a 2-minute Task to an 8-hour Enterprise deal. Longer work pays far more, so start a long one before a meeting. Signing off plays the client review: the stars land one by one, revenue counts up and XP bars fill.
+- **Your people:** 25 characters with illustrated avatars, traits (night owl, coffee-powered, perfectionist…), moods and fatigue. Coffee chats build bonds (hearts), and hearts unlock their backstory. Overwork someone and they burn out. The floor plan shows everyone at their desk, in a meeting or at the coffee machine.
+- **Inbox:** your team brings you decisions ("ship Friday or wait until Monday?"). Some are gambles you hear back on later. Others are banter to react to.
+- **Stakes:** a daily commitment (Steady, Stretch or Moonshot) with a streak; a weekly league against rival managers, where the top two move up; and funding rounds from Seed to the Trillion-dollar club, each opening a new part of the office.
+- **Unlocks as you climb:** hiring and the daily commitment (career level 2), the league and Sprints (3), IT equipment (4), Projects (6), Programmes (10) and Enterprise deals (15). From level 8 a Project office can sign off and restart work for you.
+- **Offline:** work carries on while you're away (12 h cap). The tab title and app icon show how many things need you.
+- Saves from the first version carry over: your people come with you, plus 5 referrals.
 - Open with `?debug` to get a `WF` object in the console (`WF.warp(3600)` fast-forwards an hour). Handy for testing; it's off by default.
 
 **Atlas Delivery Tracker:** `Space` logs work, `1` calls a stand-up (team ×3), `2` starts crunch mode (you ×5). Every 10th ticket is a timed incident (boss). Slack-style pings show up now and then; click them for bonuses. From sprint 15 you can accept a **reorg**, which resets your progress for permanent equity. Settings has *stealth mode* (grey icons, quiet effects) and save export/import.
@@ -95,8 +97,8 @@ Deploy the server (Option B), then set `leaderboardUrl` in `docs/config.js` to i
 **oncall:** start with `cat README.txt`. Some files are locked until you kill the process holding them.
 
 ## Customising and graphics
-Everything is drawn with CSS, inline SVG and emoji. The only image files are Workforce's app icons in `docs/workforce/icons/`. Workforce uses initials avatars, like real HR software. To reskin the games:
-- Workforce characters, gear, research, perks and unlocks live in `docs/workforce/data.js`.
+Everything is drawn with CSS, inline SVG and emoji. The only image files are Workforce's app icons in `docs/workforce/icons/`. To reskin the games:
+- Workforce characters, clients, decisions, office upgrades, unlocks and balance live in `docs/workforce/data.js`. Avatars, client logos and the floor plan are drawn in `docs/workforce/art.js`, and the game rules are in `docs/workforce/engine.js`.
 - Ticket titles, incidents, hires and achievements are plain arrays at the top of `docs/tracker/game.js`.
 - Icons are emoji in the same file. Swap in `<img src="...">` tags if you want custom sprites; stealth mode greys them out either way.
 - Word list: `WORDS` in `terminal/lintcheck.py`. World, enemies and shop: the dicts at the top of `terminal/oncall.py`.
