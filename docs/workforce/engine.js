@@ -749,7 +749,8 @@
 
     const zoneOpen = z => S.funding >= D.ZONES[z].funding;
     function buildCost(id) { const o = OFFICE[id]; return o.cost[0] * Math.pow(o.cost[1], lvl(id)); }
-    function buildTime(id) { const o = OFFICE[id]; return Math.min(o.time[0] * Math.pow(o.time[1], lvl(id)), 8 * 3600); }
+    // The first coffee bar is a tutorial step, so it takes seconds.
+    function buildTime(id) { const o = OFFICE[id]; return S.tut >= 0 && id === 'coffee' && !lvl(id) ? 8 : Math.min(o.time[0] * Math.pow(o.time[1], lvl(id)), 8 * 3600); }
     function buildBlock(id) {
       const o = OFFICE[id];
       if (!zoneOpen(o.zone)) return `Opens at ${D.FUNDING[D.ZONES[o.zone].funding].name}`;
@@ -1237,7 +1238,7 @@
 
     const TUT = [
       "Hi, I'm Dana, your manager. Welcome to Atlas! You're leading a tiny team for now: Tyler and Kai. A client is waiting: open Projects and staff the Contoso job.",
-      'Nice. That one takes 15 seconds. Projects run in real time, even when this tab is closed. Your team will message you if they need you.',
+      'Nice. That one takes a few seconds. Projects run in real time, even when this tab is closed. Your team will message you if they need you.',
       "Done! Sign it off to see what the client thinks. Every delivery gets a review: more stars mean more revenue, XP and referrals.",
       "Great review! Revenue lands in your budget. Let's spend some: build a coffee bar in the Office. Happy people do better work.",
       "Coffee's on the way. Last thing: keep your projects busy. Start another one, then go do your actual job. I'll ping you when something needs you.",
@@ -1479,7 +1480,7 @@
       return S;
     }
     function boot() {
-      S.offers = [genOffer({ size: 'S', tut: true, client: 'Contoso', tmpl: { name: 'Website copy refresh', needs: ['eng'] }, dur: 15 })];
+      S.offers = [genOffer({ size: 'S', tut: true, client: 'Contoso', tmpl: { name: 'Website copy refresh', needs: ['eng'] }, dur: 8 })];
       ensureOffers();
       advanceTut(0);
     }

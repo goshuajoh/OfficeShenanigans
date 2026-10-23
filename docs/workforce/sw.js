@@ -1,6 +1,6 @@
 // Service worker: lets Atlas Workforce open and run offline once installed.
 // Network first (so updates arrive as soon as they're published), cache as the fallback.
-const CACHE = 'workforce-v5';
+const CACHE = 'workforce-v6';
 const SHELL = [
   './', './index.html', './style.css', './data.js', './art.js', './engine.js', './game.js', './manifest.json',
   './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png',

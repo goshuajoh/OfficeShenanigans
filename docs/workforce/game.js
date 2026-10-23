@@ -191,7 +191,7 @@
       return `<button class="sheet-item ${v === view ? 'active' : ''}" data-act="nav" data-view="${v}" data-coach="sheet-${v}">${icon(v)}<span>${LABEL[v]}</span>${isNew(v) ? '<span class="right new">New</span>' : b ? `<span class="right count">${b}</span>` : ''}</button>`;
     }).join('') + '<div class="sheet-sep"></div>'
       + (isStandalone() ? '' : `<button class="sheet-item" data-act="install">${icon('install')}<span>Install on this device</span></button>`)
-      + `<button class="sheet-item" data-act="decoy">${icon('report')}<span>Report view</span><span class="right muted">hides the game</span></button>`;
+      + (compact() ? '' : `<button class="sheet-item" data-act="decoy">${icon('report')}<span>Report view</span><span class="right muted">hides the game</span></button>`);
   }
   // The coach is placed again once the sheet has finished sliding up.
   const openSheet = () => { renderSheet(); $('#sheet').classList.remove('hidden'); updateCoach(); setTimeout(updateCoach, 250); };
@@ -240,7 +240,7 @@
         ${done ? `<div class="small good">Delivered${w.billed ? ` · ${money(w.billed)} billed` : ''}. Waiting for your sign-off.</div>` : `<div class="bar"><div class="fill" data-progress="${i}" style="width:${clamp((now() - w.start) / (w.end - w.start), 0, 1) * 100}%"></div></div><div class="muted small"><span data-wseta="${i}"></span><span data-billed="${i}"></span></div>`}
       </div>
       ${done ? `<button class="btn primary glow" data-act="signoff" data-slot="${i}" data-coach="signoff">Sign off</button>`
-        : E.unlocked('rush') ? `<button class="btn rush" data-act="rush" data-slot="${i}" ${S.shots < 1 ? 'disabled' : ''} title="Use an espresso shot: halves the time left">${icon('breaks')}Rush</button>` : ''}
+        : E.unlocked('rush') ? `<button class="btn rush" data-act="rush" data-slot="${i}" data-coach="rush" ${S.shots < 1 ? 'disabled' : ''} title="Use an espresso shot: halves the time left">${icon('breaks')}Rush</button>` : ''}
     </div>`;
   }
   // Espresso shots: how many, and when the next one arrives.
@@ -274,9 +274,9 @@
   }
   const rateText = r => (r > 0 ? `▲ ${r < 10 ? '$' + r.toFixed(2) : money(r)}/s` : 'No projects billing');
   // The ring around the bolt fills as you tap and drains when you stop.
-  const hustleBtn = cls => (E.unlocked('hustle') ? `<button class="hustle ${cls || ''}" data-act="hustle" aria-label="Hustle: tap or hold to make everyone work faster">
+  const hustleBtn = cls => (E.unlocked('hustle') ? `<button class="hustle ${cls || ''}" data-act="hustle" data-coach="hustle" aria-label="Hustle: tap or hold to make everyone work faster">
     <span class="hs-gauge"><svg class="hs-ring" viewBox="0 0 40 40" aria-hidden="true"><circle class="hs-track" cx="20" cy="20" r="17"/><circle class="hs-prog" cx="20" cy="20" r="17" pathLength="100"/></svg>${icon('bolt')}</span>
-    <span class="hs-txt"><b>Hustle</b><span class="hs-sub">Tap or hold to speed everyone up</span></span><span class="hs-x">×1.0</span></button>` : '');
+    <span class="hs-txt"><b>Hustle</b></span><span class="hs-x">×1.0</span></button>` : '');
   // Revenue per five minutes over the last hour, oldest first; the last bucket is the one filling now.
   function trendBuckets() {
     const b = Math.floor(now() / 300e3);
@@ -397,9 +397,9 @@
   function commitChip() {
     if (!E.unlocked('commit') || !S.commit) return '';
     const c = S.commit;
-    if (c.tier === null) return `<button class="commit" data-act="nav" data-view="inbox">${icon('target')}<b>Set today's ${c.ipo ? 'guidance' : 'commitment'}</b></button>`;
+    if (c.tier === null) return `<button class="commit" data-act="nav" data-view="inbox" data-coach="commit">${icon('target')}<b>Set today's ${c.ipo ? 'guidance' : 'commitment'}</b></button>`;
     const pips = Array.from({ length: Math.min(c.target, 24) }, (_, i) => `<i class="${i < c.progress ? 'on' : ''}"></i>`).join('');
-    return `<div class="commit ${c.paid ? 'done' : ''}">${icon('target')}<b>${esc(E.commitName(c.tier))}</b><span class="pips">${pips}</span><span>${Math.min(c.progress, c.target)}/${c.target}${c.paid ? ' ✓' : ''}</span></div>`;
+    return `<div class="commit ${c.paid ? 'done' : ''}" data-coach="commit">${icon('target')}<b>${esc(E.commitName(c.tier))}</b><span class="pips">${pips}</span><span>${Math.min(c.progress, c.target)}/${c.target}${c.paid ? ' ✓' : ''}</span></div>`;
   }
 
   // ================================================================ views
@@ -444,7 +444,7 @@
     const items = Object.entries(D.GAMES).map(([k, g]) => {
       const on = ready.includes(k);
       const sub = on ? 'Ready' : k === 'word' ? 'Done for today' : `in ${fmtDur((E.gameReadyAt(k) - now()) / 1000)}`;
-      return `<button class="break-btn ${on ? 'on' : ''}" data-act="game" data-g="${k}"><span class="bi">${icon(GAME_ICON[k])}</span><span><b>${esc(g.name)}</b><span class="muted small">${sub}</span></span></button>`;
+      return `<button class="break-btn ${on ? 'on' : ''}" data-act="game" data-g="${k}" data-coach="break-${k}"><span class="bi">${icon(GAME_ICON[k])}</span><span><b>${esc(g.name)}</b><span class="muted small">${sub}</span></span></button>`;
     }).join('');
     return `<div class="card"><div class="card-title">Breaks <span class="muted small">· quick games that pay out boosts</span><span class="spacer"></span>${boostHtml()}</div><div class="break-row">${items}</div></div>`;
   }
@@ -745,7 +745,7 @@
     </div>
     <div class="card"><div class="card-title">Help</div>
       <p class="small" style="margin-top:0">Projects run in real time, even with this tab closed. Check in whenever suits you: sign off deliveries, answer your team, start the next project. Waiting on something? Hold Hustle to speed everyone up, rush it with an espresso shot, or take a break: the mini-games pay out boosts.</p>
-      <p class="muted small">${compact() ? 'Tap ⧉ at the top' : 'Press <b>Esc</b> or <b>`</b>'} for a very boring report.</p>
+      ${compact() ? '' : '<p class="muted small">Press <b>Esc</b> or <b>`</b> for a very boring report.</p>'}
       <div class="row"><button class="btn danger" data-act="reset">Reset everything</button></div>
     </div>`;
 
@@ -786,12 +786,15 @@
   const toGo = x => (x ? (x.end > now() ? `${fmtDur((x.end - now()) / 1000)} to go` : 'Done') : '');
   // Money, progress bars and the hustle meter move every animation frame (billing and hustle are
   // continuous); the smaller text around them is refreshed four times a second.
-  let lastSlow = 0;
+  let lastSlow = 0, lastDue = '';
   function frame() {
     requestAnimationFrame(frame);
     if (document.hidden || !$('#decoy').classList.contains('hidden')) return;
     E.accrue();
     const t = now();
+    // A project or a build that has just finished shows at once, not at the next one-second tick.
+    const due = E.ready(t).join(',') + '|' + S.builds.filter(b => t >= b.end).length;
+    if (due !== lastDue) { lastDue = due; tick(); }
     const prog = x => clamp((t - x.start) / (x.end - x.start), 0, 1) * 100 + '%';
     for (const el of $$('[data-progress]')) { const w = S.ws[+el.dataset.progress]; if (w) el.style.width = prog(w); }
     for (const el of $$('[data-bprog]')) { const b = S.builds.find(x => x.id === el.dataset.bprog); if (b) el.style.width = prog(b); }
@@ -803,7 +806,10 @@
     }
     const lvl = E.hustleLevel(t);
     for (const b of $$('button.hustle')) {
-      b.querySelector('.hs-prog').style.strokeDashoffset = 100 - 100 * lvl;
+      const prog = b.querySelector('.hs-prog');
+      prog.style.strokeDashoffset = 100 - 100 * lvl;
+      prog.style.strokeOpacity = lvl > 0.005 ? 1 : 0; // an empty ring would still show its round end as a dot
+      b.style.setProperty('--lvl', lvl.toFixed(3));
       b.querySelector('.hs-x').textContent = '×' + (1 + (D.BALANCE.hustleMax - 1) * lvl).toFixed(1);
       b.classList.toggle('hot', lvl > 0.95);
     }
@@ -891,7 +897,11 @@
     renderNav();
     renderView(true);
     toastLater.splice(0).slice(-2).forEach(t => toast(...t));
+    if (paid) { paid = false; bump('#cashChip, [data-cash]'); }
   }
+  // After a review closes, the budget gives a little jump: that is where the money went.
+  let paid = false;
+  function bump(sel) { for (const el of $$(sel)) { el.classList.remove('bump'); void el.offsetWidth; el.classList.add('bump'); } }
   function confirmDialog(title, body, okLabel, onOk) {
     confirmCb = onOk;
     openDialog(`<h3>${esc(title)}</h3>${body}<div class="actions"><button class="btn" data-act="closeDialog">Cancel</button><button class="btn primary" data-act="confirmOk">${esc(okLabel)}</button></div>`);
@@ -972,7 +982,9 @@
       verdict.textContent = D.VERDICTS[r.stars - 1];
       q.textContent = `“${quote}”`;
       buzz(r.stars === 5 ? [18, 50, 18] : 12);
+      if (r.stars === 5 && !stealth) confetti($('.rstars'));
     }, step * (r.stars + 1));
+    paid = true;
     countUp($('#money'), r.cash, stealth ? 0 : 900);
     setTimeout(() => $$('.xp-row .fill').forEach(f => { f.style.width = f.dataset.to; }), stealth ? 0 : 350);
   }
@@ -983,8 +995,21 @@
       const k = Math.min(1, (t - t0) / ms);
       el.textContent = '+' + money(to * (1 - Math.pow(1 - k, 3)));
       if (k < 1 && document.body.contains(el)) requestAnimationFrame(stepFn);
+      else el.classList.add('landed');
     };
     requestAnimationFrame(stepFn);
+  }
+  function confetti(host) {
+    if (!host) return;
+    const colors = ['#f5b301', '#12805c', '#0b8aa8', '#d6336c', '#7a3fd1'];
+    const box = document.createElement('div');
+    box.className = 'rv-bits';
+    box.innerHTML = Array.from({ length: 22 }, (_, i) => {
+      const a = (i / 22) * Math.PI * 2, r = 70 + Math.random() * 90;
+      return `<i style="--dx:${(Math.cos(a) * r).toFixed(0)}px;--dy:${(Math.sin(a) * r * 0.6).toFixed(0)}px;--d:${(Math.random() * 0.15).toFixed(2)}s;--c:${pick(colors)}"></i>`;
+    }).join('');
+    host.appendChild(box);
+    setTimeout(() => box.remove(), 1600);
   }
   function showSummary(results) {
     const total = results.reduce((a, r) => a + r.cash, 0);
@@ -993,11 +1018,13 @@
     const ups = results.flatMap(r => r.levelups);
     const extras = results.map(extrasHtml).join('');
     openDialog(`<h3>${results.length} deliveries signed off</h3>
-      <div class="money">+${money(total)}</div><div class="muted small" style="text-align:center">Average rating ${avg.toFixed(1)}★${billed ? ` · on top of ${money(billed)} billed while the team worked` : ''}</div>
+      <div class="money" id="money">+$0</div><div class="muted small" style="text-align:center">Average rating ${avg.toFixed(1)}★${billed ? ` · on top of ${money(billed)} billed while the team worked` : ''}</div>
       <ul class="feed" style="margin-top:12px">${results.map(r => `<li><span class="logo" style="width:22px;height:22px">${A.logo(r.offer.client)}</span><span class="grow">${esc(r.offer.client)} · ${esc(r.offer.name)}</span><span class="stars">${'★'.repeat(r.stars)}</span></li>`).join('')}</ul>
       ${ups.length ? `<div class="extras">${ups.map(u => `<div class="extra">${av(u.id, 'sm')}<span><b>${esc(who(u.id).first)}</b> reached level ${u.to}</span></div>`).join('')}</div>` : ''}
       <div class="extras">${extras}</div>
-      <div class="actions"><button class="btn primary" data-act="closeDialog">Done</button></div>`);
+      <div class="actions"><button class="btn primary" data-act="closeDialog">Done</button></div>`, { cls: 'review' });
+    paid = true;
+    countUp($('#money'), total, S.settings.stealth ? 0 : 900);
   }
 
   // --- blind boxes
@@ -1008,7 +1035,7 @@
     openDialog(`<h3>${esc(pk.name)}</h3><div class="muted small">${res.length > 1 ? 'Tap a box to open it, or open them all.' : 'Tap the box to open it.'}</div>
       <div class="boxes n${res.length}">${res.map((x, i) => boxHtml(kind, x, i)).join('')}</div>
       <div class="box-sum small" id="boxSum"></div>
-      <div class="actions">${res.length > 1 ? '<button class="btn" data-act="openAll">Open all</button>' : ''}<button class="btn primary" data-act="closeDialog">Done</button></div>`, { cls: 'pack-dialog' });
+      <div class="actions"><button class="btn primary" data-act="packGo" id="packGo">${res.length > 1 ? 'Open all' : 'Open'}</button></div>`, { cls: 'pack-dialog' });
     if (S.settings.stealth) boxes.forEach((_, i) => openBox(i, true));
   }
   function boxHtml(kind, x, i) {
@@ -1022,12 +1049,13 @@
     const el = $(`.bbox[data-i="${i}"]`);
     if (!b || b.opened || !el) return;
     b.opened = true;
-    if (instant) { el.classList.add('open'); boxSummary(); return; }
+    if (instant) { el.classList.add('open'); b.shown = true; boxSummary(); return; }
     // Principal and Legend boxes charge up for longer, then open into a full-screen reveal.
     const rare = b.r >= 4;
     el.classList.add(rare ? 'charge' : 'shake');
     setTimeout(() => {
       el.classList.add('open');
+      b.shown = true;
       if (b.r === 3) buzz([20, 40, 20]);
       boxSummary();
       if (rare && document.body.contains(el)) rareSplash(b);
@@ -1067,7 +1095,11 @@
     buzz(p.r === 5 ? [30, 60, 30, 60, 120] : [25, 50, 60]);
     setTimeout(() => { const btn = el.querySelector('.sp-go'); if (btn) btn.focus({ preventScroll: true }); }, 50);
   }
+  // A box counts as seen once its card is face up. Until then the pack's button opens boxes, not closes.
+  const packPending = () => $('#dialog').classList.contains('pack-dialog') && boxes.some(b => !b.shown);
   function boxSummary() {
+    const go = $('#packGo');
+    if (go && !packPending()) go.textContent = 'Done';
     const el = $('#boxSum');
     if (!el || boxes.length < 2 || boxes.some(b => !b.opened)) return;
     const n = k => boxes.filter(k).length;
@@ -1530,29 +1562,55 @@
 
   // ================================================================ coach marks (first session)
 
+  // Each tutorial step lists where to point, in order of preference. While the tutorial runs, only the
+  // highlighted control works. After it, each new feature gets one tip that blocks nothing and closes when used.
   const COACH = {
     0: [['offer-tut', 'Start your first project'], ['next', 'Start here'], ['tab-projects', 'Projects'], ['nav-projects', 'Projects']],
     1: [['ws0', 'Running in real time…']],
     2: [['signoff', 'Sign it off'], ['next', 'Sign it off']],
     3: [['build-coffee', 'Build a coffee bar'], ['next', 'Open the office'], ['nav-office', 'Office'], ['tab-more', 'Office is in here'], ['sheet-office', 'Office']],
-    4: [['offer-any', 'Start another'], ['next', 'Start another']],
+    4: [['offer-any', 'Start another project'], ['next', 'Start another project'], ['tab-projects', 'Back to Projects'], ['nav-projects', 'Back to Projects']],
   };
-  function hideCoach() { $('#coach').classList.add('hidden'); $('#coachTip').classList.add('hidden'); }
+  const TIPS = [
+    ['hustle', [['hustle', 'Tap or hold to speed everyone up']]],
+    ['hiring', [['pack-single', 'Spend a referral on a blind CV'], ['nav-hiring', 'New: Hiring'], ['tab-more', 'New: Hiring is in here'], ['sheet-hiring', 'Hiring']]],
+    ['rush', [['rush', 'An espresso shot halves the time left']]],
+    ['commit', [['commit', 'Pick a daily target for bonus referrals']]],
+    ['breaks', [['break-word', 'Quick games that pay out boosts'], ['nav-breaks', 'New: Breaks'], ['sheet-breaks', 'New: Breaks']]],
+    ['league', [['nav-league', 'New: a weekly league'], ['sheet-league', 'New: a weekly league']]],
+  ];
+  let coachEl = null, coachTipId = null, coachFinal = false, coachKeys = [];
+  function hideCoach() { coachEl = null; $('#coach').classList.add('hidden'); $('#coachTip').classList.add('hidden'); }
   function updateCoach() {
-    if (S.tut < 0 || !$('#overlay').classList.contains('hidden')) return hideCoach();
+    if (!$('#overlay').classList.contains('hidden') || !$('#decoy').classList.contains('hidden')) return hideCoach();
+    let steps = COACH[S.tut] || null;
+    coachTipId = null;
+    if (S.tut < 0) {
+      // A tip waits (false) from the moment its feature unlocks. Older saves have no entry, so they get no tips.
+      const t = TIPS.find(([id]) => S.seen['tip:' + id] === false);
+      if (t) [coachTipId, steps] = t;
+    }
+    if (!steps) return hideCoach();
     // With the More sheet open, only its items can be pointed at: everything else is underneath it.
     const sheet = $('#sheet').classList.contains('hidden') ? null : $('#sheet');
     const bar = $('#tabbar').getBoundingClientRect();
     const viewTop = $('.topbar').getBoundingClientRect().bottom;
     const viewBottom = bar.height ? bar.top : window.innerHeight;
     const ring = $('#coach'), tip = $('#coachTip');
-    for (const [key, text] of COACH[S.tut] || []) {
+    coachKeys = steps.map(s => s[0]);
+    for (const [i, [key, text]] of steps.entries()) {
       const el = $$(`[data-coach="${key}"]`).find(x => (!sheet || sheet.contains(x)) && (x.offsetParent !== null || x.getClientRects().length));
       if (!el) continue;
       const r = el.getBoundingClientRect();
       if (r.width === 0) continue;
+      const off = $('#view').contains(el) && (r.top < viewTop || r.bottom > viewBottom);
+      if (off && coachTipId) break; // a tip waits until its control is on screen
+      coachEl = el;
+      coachFinal = i === 0;
       tip.classList.remove('hidden');
-      if ($('#view').contains(el) && (r.top < viewTop || r.bottom > viewBottom)) {
+      tip.classList.toggle('tip', !!coachTipId);
+      ring.classList.toggle('soft', !!coachTipId);
+      if (off) {
         // On this page but scrolled out of sight: point to it from the edge, rather than back to the menu.
         const up = r.top < viewTop;
         ring.classList.add('hidden');
@@ -1563,16 +1621,31 @@
         return;
       }
       tip.classList.remove('edge');
-      delete tip.dataset.act;
+      if (coachTipId) { tip.dataset.act = 'tipDone'; tip.innerHTML = `${esc(text)}<span class="tip-x" aria-label="Close">×</span>`; } else { delete tip.dataset.act; tip.textContent = text; }
       Object.assign(ring.style, { left: r.left - 4 + 'px', top: r.top - 4 + 'px', width: r.width + 8 + 'px', height: r.height + 8 + 'px' });
       ring.classList.remove('hidden');
-      tip.textContent = text;
-      const above = r.top > 60;
-      Object.assign(tip.style, { left: clamp(r.left, 8, window.innerWidth - tip.offsetWidth - 8) + 'px', top: (above ? r.top - 36 : r.bottom + 10) + 'px' });
+      const above = r.top > 60 + tip.offsetHeight;
+      Object.assign(tip.style, { left: clamp(r.left, 8, window.innerWidth - tip.offsetWidth - 8) + 'px', top: (above ? r.top - tip.offsetHeight - 10 : r.bottom + 10) + 'px' });
       return;
     }
     hideCoach();
   }
+  // A tap during the tutorial: true if it may go ahead. A tap on a tip's own control also closes the tip.
+  function coachAllows(el) {
+    updateCoach(); // the step may have moved on since the coach was last placed
+    if (!coachEl || !$('#overlay').classList.contains('hidden') || ['decoy', 'coachGo', 'tipDone'].includes(el.dataset.act)) return true;
+    const on = coachEl.contains(el);
+    if (coachTipId) { if (on && coachFinal) closeTip(); return true; }
+    // Any control on this step's path works, not only the one in the ring. If that control is disabled
+    // (an old save that cannot afford the coffee bar, say), nothing is blocked, so nobody gets stuck.
+    if (on || S.tut < 0 || coachEl.disabled || coachKeys.some(k => el.closest(`[data-coach="${k}"]`))) return true;
+    const tip = $('#coachTip');
+    tip.classList.remove('nudge');
+    void tip.offsetWidth;
+    tip.classList.add('nudge');
+    return false;
+  }
+  function closeTip() { if (!coachTipId) return; S.seen['tip:' + coachTipId] = true; save(); hideCoach(); updateCoach(); }
 
   // ================================================================ engine events → UI
 
@@ -1582,7 +1655,7 @@
       const { type, data } = pendingEvents.shift();
       if (type === 'levelup' && !inReveal) toast(`${who(data.id).first} reached level ${data.lvl}`, data.id);
       else if (type === 'career' && !inReveal) toast(`Career level ${data.lvl}`);
-      else if (type === 'unlock') toast(`New: ${data.title}`);
+      else if (type === 'unlock') { toast(`New: ${data.title}`); S.seen['tip:' + data.id] = false; }
       else if (type === 'built') toast(`${E.OFFICE[data.id].name} upgraded`);
       else if (type === 'achievement') toast(`Badge: ${data.name}`);
       else if (type === 'burnout') toast(`${who(data.id).first} is burnt out and taking a break`, data.id);
@@ -1707,6 +1780,7 @@
     },
     declineCall: () => { E.missCall(); ringing = 0; $('#call').classList.add('hidden'); save(); },
     coachGo: d => { const el = $(`#view [data-coach="${d.key}"]`); if (el) el.scrollIntoView({ block: 'center', behavior: S.settings.stealth ? 'auto' : 'smooth' }); },
+    tipDone: () => closeTip(),
     decoy: () => { closeSheet(); toggleDecoy(); },
     closeDialog: () => closeDialog(),
     confirmOk: () => { const cb = confirmCb; confirmCb = null; closeDialog(); if (cb) cb(); },
@@ -1753,6 +1827,8 @@
     openBox: d => openBox(+d.i),
     splashNext: () => { if (now() - splashAt < 700) return; splashQueue.shift(); showSplash(); }, // the delay stops a double tap skipping it
     openAll: () => boxes.forEach((b, i) => setTimeout(() => openBox(i), S.settings.stealth ? 0 : i * 170)),
+    // The pack's main button opens what is still closed, so nobody leaves without seeing who they hired.
+    packGo: () => (packPending() ? ACTIONS.openAll() : closeDialog()),
     rush: d => {
       const r = E.rush(+d.slot);
       if (!r) return toast(S.shots < 1 ? `No espresso shots left. One arrives every ${D.BALANCE.shotMinutes} minutes.` : 'Nothing to rush');
@@ -1863,13 +1939,14 @@
         <div class="in-stars">${[1, 2, 3, 4, 5].map(i => `<svg class="rstar" style="animation-delay:${1 + i * 0.15}s" viewBox="0 0 24 24">${STAR_SVG}</svg>`).join('')}<b class="in-pay">+$24</b></div>` },
     { title: 'Grow the company', text: 'Spend the budget on a better office. Hire from blind boxes: you only see who you got when you open one. Grow from a garage startup all the way to an IPO.',
       art: () => `<div class="in-office">${A.floor({ id: 'in', lv: { coffee: 3, plants: 3, desks: 2, rooms: 2, pmo: 1, lounge: 2, phones: 3 }, zones: { library: 'x', servers: 'x', games: 'x', lobby: 'x' }, desks: 8, building: [] })}</div>` },
-    { title: 'Play it your way', text: 'Check in for a minute or leave it running all day. Hold Hustle to speed everyone up. And if someone walks past, press Esc (or tap ⧉) for a very boring report.',
-      art: () => `<div class="in-play"><span class="hustle big in-hustle" aria-hidden="true"><span class="hs-gauge"><svg class="hs-ring" viewBox="0 0 40 40"><circle class="hs-track" cx="20" cy="20" r="17"/><circle class="hs-prog" cx="20" cy="20" r="17" pathLength="100" style="stroke-dashoffset:35"/></svg>${icon('bolt')}</span><span class="hs-txt"><b>Hustle</b></span><span class="hs-x">×2.3</span></span>
-        <span class="in-key"><kbd>Esc</kbd>${icon('report')}<span class="muted small">Report view</span></span></div>` },
+    // Phones have no report view: nobody hides a phone screen at work.
+    { title: 'Play it your way', text: 'Check in for a minute or leave it running all day. Hold Hustle to speed everyone up.', desk: 'And if someone walks past, press Esc for a very boring report.',
+      art: () => `<div class="in-play"><span class="hustle big in-hustle" aria-hidden="true" style="--lvl:.65"><span class="hs-gauge"><svg class="hs-ring" viewBox="0 0 40 40"><circle class="hs-track" cx="20" cy="20" r="17"/><circle class="hs-prog" cx="20" cy="20" r="17" pathLength="100" style="stroke-dashoffset:35"/></svg>${icon('bolt')}</span><span class="hs-txt"><b>Hustle</b></span><span class="hs-x">×2.3</span></span>
+        ${compact() ? '' : `<span class="in-key"><kbd>Esc</kbd>${icon('report')}<span class="muted small">Report view</span></span>`}</div>` },
   ];
   function showIntro(i = 0) {
     const s = INTRO[i], last = i === INTRO.length - 1;
-    openDialog(`<div class="in-art">${s.art()}</div><div class="in-step muted small">${i + 1} of ${INTRO.length}</div><h3>${esc(s.title)}</h3><p>${esc(s.text)}</p>
+    openDialog(`<div class="in-art">${s.art()}</div><div class="in-step muted small">${i + 1} of ${INTRO.length}</div><h3>${esc(s.title)}</h3><p>${esc(s.text)}${s.desk && !compact() ? ' ' + esc(s.desk) : ''}</p>
       ${last ? '<label class="field" style="max-width:none">What should the team call you?<input id="nameInput" maxlength="20" placeholder="Your first name" autocomplete="off"></label><p class="muted small">Everything else, and there is a lot more, opens up as you go.</p>' : ''}
       <div class="in-foot"><div class="in-dots">${INTRO.map((_, k) => `<i class="${k === i ? 'on' : ''}"></i>`).join('')}</div>
         <div class="actions">${i ? `<button class="btn" data-act="intro" data-i="${i - 1}">Back</button>` : `<button class="btn ghost" data-act="intro" data-i="${INTRO.length - 1}">Skip</button>`}
@@ -1891,14 +1968,17 @@
     document.addEventListener('pointerup', () => setTimeout(() => { pointerDown = false; }, 60));
     document.addEventListener('click', e => {
       const el = e.target.closest('[data-act]');
-      if (!el || el.disabled) return;
+      if (!el || el.disabled || !coachAllows(el)) return;
       const fn = ACTIONS[el.dataset.act];
       if (fn) fn(el.dataset, e);
     });
     document.addEventListener('input', e => {
       if (e.target.id === 'setName') { S.name = e.target.value.trim().slice(0, 20); save(); }
     });
-    $('#overlay').addEventListener('click', e => { if (e.target.id === 'overlay' && !reveal && !$('#dialog').classList.contains('intro-dialog')) closeDialog(); });
+    $('#overlay').addEventListener('click', e => {
+      if (e.target.id !== 'overlay' || reveal || $('#dialog').classList.contains('intro-dialog')) return;
+      if (packPending()) ACTIONS.openAll(); else closeDialog();
+    });
     $('#sheet').addEventListener('click', e => { if (e.target.id === 'sheet') closeSheet(); });
     $('#decoy').addEventListener('dblclick', toggleDecoy);
     const onResize = () => renderView(true);
@@ -1961,7 +2041,7 @@
       }
       if (e.key === 'Escape' && !$('#splash').classList.contains('hidden')) { ACTIONS.splashNext(); return; } // ` still opens the report view
       if (e.key === 'Escape' && !$('#sheet').classList.contains('hidden')) { closeSheet(); return; }
-      if (e.key === 'Escape' && open) { closeDialog(); return; }
+      if (e.key === 'Escape' && open) { if (packPending()) ACTIONS.openAll(); else closeDialog(); return; }
       if ((e.key === 'Escape' || e.key === '`') && !/INPUT|TEXTAREA/.test(document.activeElement.tagName)) { e.preventDefault(); toggleDecoy(); return; }
       if (e.key === 'Enter' && document.activeElement && document.activeElement.id === 'nameInput') ACTIONS.saveName();
     });
@@ -2015,6 +2095,7 @@
     const away = (now() - S.lastSeen) / 1000;
     const before = { office: JSON.stringify(S.office), inbox: S.inbox.length, price: S.stock ? S.stock.price : 0, splits: S.stock ? S.stock.splits : 0, lifetime: S.lifetime };
     E.tick();
+    for (const ev of pendingEvents) if (ev.type === 'unlock') S.seen['tip:' + ev.data.id] = false;
     pendingEvents.length = 0;
     lastReady = lastReadyToast = E.ready().join(',');
     bind();
