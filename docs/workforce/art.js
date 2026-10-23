@@ -1,4 +1,4 @@
-// Atlas Workforce art: illustrated avatars, client logos, icons and the office floor plan, all drawn as inline SVG.
+// Atlas Workforce art: illustrated avatars, client logos, icons, splash art and the 3D office, all drawn as inline SVG.
 window.WF_ART = (() => {
   'use strict';
 
@@ -95,8 +95,7 @@ window.WF_ART = (() => {
   }
   function bot(look) {
     const c = look.top || '#6c63ff';
-    return `<rect width="64" height="64" fill="${look.bg || '#e7e5ff'}"/>`
-      + `<path d="M9 64C9 52 17.5 46 27 45H37C46.5 46 55 52 55 64Z" fill="${c}"/>`
+    return `<path d="M9 64C9 52 17.5 46 27 45H37C46.5 46 55 52 55 64Z" fill="${c}"/>`
       + `<rect x="27.5" y="38" width="9" height="8" rx="2" fill="${shade(c, -0.25)}"/>`
       + `<path d="M32 12V7" stroke="${shade(c, -0.2)}" stroke-width="2"/><circle cx="32" cy="6" r="2.6" fill="#ff8fb1"/>`
       + `<rect x="17.5" y="12" width="29" height="28" rx="9" fill="#f6f7ff" stroke="${c}" stroke-width="2"/>`
@@ -107,8 +106,7 @@ window.WF_ART = (() => {
 
   function dog(look) {
     const f = look.fur || '#e2a857', d = shade(f, -0.22), l = shade(f, 0.4);
-    return `<rect width="64" height="64" fill="${look.bg || '#fdf0d5'}"/>`
-      + `<path d="M12 64C12 52 20 46 32 46S52 52 52 64Z" fill="${f}"/><path d="M25 64C25 56 28 52.5 32 52.5S39 56 39 64Z" fill="${l}"/>`
+    return `<path d="M12 64C12 52 20 46 32 46S52 52 52 64Z" fill="${f}"/><path d="M25 64C25 56 28 52.5 32 52.5S39 56 39 64Z" fill="${l}"/>`
       + `<path d="M20.5 45.5Q32 51 43.5 45.5L44.5 48.6Q32 54.6 19.5 48.6Z" fill="#d6336c"/><circle cx="32" cy="53.2" r="2.6" fill="#f4c542" stroke="#c99a1e" stroke-width=".8"/>`
       + `<path d="M18 17C11.5 19 9 31 12.5 40C15 42.5 18.6 40.5 19.6 36L21.5 22Z" fill="${d}"/><path d="M46 17C52.5 19 55 31 51.5 40C49 42.5 45.4 40.5 44.4 36L42.5 22Z" fill="${d}"/>`
       + `<ellipse cx="32" cy="28" rx="14" ry="15" fill="${f}"/><path d="M27 14.5Q32 12.5 37 14.5Q35 19 32 19.5Q29 19 27 14.5Z" fill="${l}" opacity=".7"/>`
@@ -120,15 +118,16 @@ window.WF_ART = (() => {
   }
 
   // Returns an inline SVG. opts.mono draws a grey silhouette (for people not hired yet).
+  // opts.bare returns only the drawing, with no background, to place inside a larger picture.
   function avatar(look, opts = {}) {
-    let inner;
+    let inner, bg = '#e8edf3';
     if (!look) look = {};
-    if (look.dog) inner = dog(look);
-    else if (look.bot) inner = bot(look);
+    if (look.dog) { inner = dog(look); bg = '#fdf0d5'; }
+    else if (look.bot) { inner = bot(look); bg = '#e7e5ff'; }
     else {
       const skin = SKIN[look.skin == null ? 1 : look.skin];
       const hairC = look.hc || '#2b2018';
-      const parts = [`<rect width="64" height="64" fill="${look.bg || '#e8edf3'}"/>`];
+      const parts = [];
       if (look.hair === 'hijab') {
         parts.push(body(look.topStyle, look.top || '#5b6170', skin), hijab(hairC, skin));
       } else {
@@ -146,8 +145,9 @@ window.WF_ART = (() => {
       parts.push(glasses(look.glasses), accessory(look.acc));
       inner = parts.join('');
     }
+    if (opts.bare) return inner;
     const filter = opts.mono ? ' style="filter:grayscale(1) brightness(1.15) contrast(.6);opacity:.55"' : '';
-    return `<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"${filter}>${inner}</svg>`;
+    return `<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"${filter}><rect width="64" height="64" fill="${look.bg || bg}"/>${inner}</svg>`;
   }
 
   // ------------------------------------------------------------------ client logos, icons
@@ -250,148 +250,358 @@ window.WF_ART = (() => {
       + `<i class="ch-dot" style="left:${(100 * X(last[0]) / W).toFixed(2)}%;top:${(100 * Y(last[1]) / H).toFixed(2)}%;background:${c}"></i>`
       + '<i class="ch-cross hidden"></i><i class="ch-hdot hidden" style="background:' + c + '"></i><div class="ch-tip hidden"></div></div>';
   }
-  // ------------------------------------------------------------------ floor plan
-  // 720×360. Zones open as funding rounds land; furniture appears as you build.
-  const FP = { w: 720, h: 360 };
+  // ------------------------------------------------------------------ the office, in isometric 3D
+  // World units: the floor is 720 along x (drawn towards the lower right) and 360 along y (towards the lower left). z is up.
+  // Zones open as funding rounds land. Furniture appears, and gets better, as you build.
+  const FW = 720, FD = 360, WALL = 84, SLAB = 14, PAD = 26;
+  const OX = FD + PAD, OY = WALL + PAD;
+  const VB = { w: FW + FD + 2 * PAD, h: (FW + FD) / 2 + WALL + SLAB + 2 * PAD };
+  const P = (x, y, z = 0) => [OX + x - y, OY + (x + y) / 2 - z];
+  const pt = (x, y, z) => P(x, y, z).map(v => v.toFixed(1)).join(' ');
+  const poly = (ps, fill, extra = '') => `<polygon points="${ps.map(p => p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(' ')}" fill="${fill}"${extra}/>`;
+  // Flat details are drawn in their own plane: a level surface at height z, one of the two back walls, or a side that faces +y.
+  const flat = (z, s) => `<g transform="matrix(1 .5 -1 .5 ${OX} ${OY - z})">${s}</g>`;
+  const wallR = s => `<g transform="matrix(1 .5 0 1 ${OX} ${OY - WALL})">${s}</g>`; // the y = 0 wall, in (x, distance below its top)
+  const wallL = s => `<g transform="matrix(1 -.5 0 1 ${OX - FD} ${OY - WALL + FD / 2})">${s}</g>`; // the x = 0 wall, in (360 − y, distance below its top)
+  const face = (y, s) => `<g transform="matrix(1 .5 0 1 ${OX - y} ${OY + y / 2})">${s}</g>`; // the plane at this y, in (x, −z)
+
+  // A solid box: its top and the two sides that face the viewer. The light comes from the upper left.
+  function cube(x, y, z, w, d, h, c) {
+    const t = z + h;
+    return poly([P(x, y + d, t), P(x + w, y + d, t), P(x + w, y + d, z), P(x, y + d, z)], shade(c, -0.07))
+      + poly([P(x + w, y, t), P(x + w, y + d, t), P(x + w, y + d, z), P(x + w, y, z)], shade(c, -0.2))
+      + poly([P(x, y, t), P(x + w, y, t), P(x + w, y + d, t), P(x, y + d, t)], c);
+  }
+  // A glass box, in two halves, so that what stands inside is drawn between its back and its front.
+  function glass(x, y, w, d, h, tint) {
+    const side = (ps, o) => poly(ps, tint, ` fill-opacity="${o}"`);
+    return [
+      side([P(x, y, 0), P(x + w, y, 0), P(x + w, y, h), P(x, y, h)], 0.55) + side([P(x, y, 0), P(x, y + d, 0), P(x, y + d, h), P(x, y, h)], 0.45),
+      side([P(x, y + d, 0), P(x + w, y + d, 0), P(x + w, y + d, h), P(x, y + d, h)], 0.2) + side([P(x + w, y, 0), P(x + w, y + d, 0), P(x + w, y + d, h), P(x + w, y, h)], 0.3)
+        + `<path d="M${pt(x, y, h)}L${pt(x + w, y, h)}L${pt(x + w, y + d, h)}L${pt(x, y + d, h)}ZM${pt(x, y + d, 0)}L${pt(x, y + d, h)}M${pt(x + w, y + d, 0)}L${pt(x + w, y + d, h)}M${pt(x + w, y, 0)}L${pt(x + w, y, h)}" fill="none" stroke="${shade(tint, -0.4)}" stroke-width="1.6" stroke-linejoin="round"/>`,
+    ];
+  }
+
+  const WOOD = '#d8bf98', METAL = '#8a919d';
+  function chair(x, y, c = '#3a4252') {
+    return cube(x + 5, y + 4, 0, 3, 3, 8, '#59606d') + cube(x, y, 8, 13, 11, 3, c) + cube(x, y + 11, 8, 13, 2.5, 13, shade(c, 0.12));
+  }
+  // A desk with its monitors facing the chair, and the chair on the viewer's side.
+  function desk(x, y, lvl) {
+    const h = lvl >= 4 ? 28 : 21;
+    let s = cube(x + 1, y + 2, 0, 3, 24, h - 3, METAL) + cube(x + 52, y + 2, 0, 3, 24, h - 3, METAL) + cube(x, y, h - 3, 56, 28, 3, lvl >= 3 ? '#f1f0ec' : WOOD);
+    for (const mx of lvl >= 2 ? [x + 6, x + 29] : [x + 17]) {
+      s += cube(mx + 9, y + 5, h, 3, 3, 5, '#59606d') + cube(mx, y + 4, h + 4, 21, 3, 13, '#2b3140')
+        + face(y + 7, `<rect class="fp-screen" x="${mx + 1.5}" y="${-(h + 15.5)}" width="18" height="10" rx="1" fill="#7cc6e8"/>`
+          + `<path class="fp-code" d="M${mx + 3.5} ${-(h + 13)}h9M${mx + 3.5} ${-(h + 10.5)}h12M${mx + 3.5} ${-(h + 8)}h6" stroke="#fff" stroke-opacity=".8" stroke-width="1.1"/>`);
+    }
+    return s + cube(x + 18, y + 16, h, 20, 7, 1.5, '#cfd5dd');
+  }
+  function plant(x, y, s = 1) {
+    const [cx, cy] = P(x + 6 * s, y + 6 * s, 13 * s);
+    const leaf = (dx, dy, r, c) => `<circle cx="${(cx + dx * s).toFixed(1)}" cy="${(cy + dy * s).toFixed(1)}" r="${(r * s).toFixed(1)}" fill="${c}"/>`;
+    return cube(x, y, 0, 12 * s, 12 * s, 13 * s, '#c47e55')
+      + `<g class="fp-plant" style="transform-origin:${cx.toFixed(1)}px ${cy.toFixed(1)}px">`
+      + leaf(-7, -7, 8, '#3f8a50') + leaf(7, -9, 8, '#4e9a5c') + leaf(0, -18, 9, '#5fae6c') + leaf(-2, -5, 7, '#57a565') + leaf(7, -2, 6, '#469356') + '</g>';
+  }
+  function room(x, y) {
+    const [back, front] = glass(x, y, 78, 44, 44, '#cfe6f5');
+    const seat = (cx, cy) => cube(cx, cy, 0, 9, 8, 9, '#5b6b84');
+    return back + seat(x + 7, y + 18) + cube(x + 20, y + 14, 0, 38, 16, 15, '#c9a77c') + seat(x + 26, y + 33) + seat(x + 44, y + 33) + seat(x + 62, y + 18) + front;
+  }
+  function booth(x, y) {
+    const [back, front] = glass(x, y, 26, 24, 54, '#bfe3d2');
+    return cube(x, y, 0, 26, 24, 2, '#9fc4b0') + back + cube(x + 8, y + 8, 0, 9, 8, 12, '#e2725b') + front + cube(x - 1, y - 1, 54, 28, 26, 3, '#7fa894');
+  }
+  function sofa(x, y, len, c) { // its back is against the x = 16 wall, so it faces +x
+    return cube(x, y, 0, 8, len, 26, shade(c, -0.05)) + cube(x, y, 0, 26, 7, 17, c) + cube(x + 8, y + 7, 0, 18, len - 14, 11, shade(c, 0.12)) + cube(x, y + len - 7, 0, 26, 7, 17, c);
+  }
+  function lamp(x, y) {
+    const [lx, ly] = P(x + 3, y + 3, 44);
+    return cube(x, y, 0, 6, 6, 2, '#59606d') + cube(x + 2, y + 2, 2, 2, 2, 38, '#59606d') + `<ellipse cx="${lx.toFixed(1)}" cy="${ly.toFixed(1)}" rx="9" ry="6" fill="#ffe8a3"/><ellipse cx="${lx.toFixed(1)}" cy="${(ly + 3).toFixed(1)}" rx="9" ry="3" fill="#f4d27a"/>`;
+  }
+  const BOOKS = ['#c0392b', '#2f6db5', '#e0a800', '#3f8f5a', '#7a3fd1', '#e67e22'];
+  function shelf(x, y, n) {
+    let books = '';
+    for (let row = 0; row < 3; row++) {
+      const z0 = 5 + row * 18;
+      books += `<rect x="${x + 2}" y="${-(z0 + 15)}" width="36" height="15" fill="#5e4631"/>`;
+      for (let b = 0; b < 7; b++) {
+        const hb = 9 + ((b * 7 + row * 3 + n) % 5);
+        books += `<rect x="${x + 3 + b * 5}" y="${-(z0 + hb)}" width="4" height="${hb}" fill="${BOOKS[(b + row * 2 + n) % BOOKS.length]}"/>`;
+      }
+    }
+    return cube(x, y, 0, 40, 12, 58, '#8b6a4a') + face(y + 12, books);
+  }
+  function rack(x, y, on, i) {
+    let leds = '';
+    for (let k = 0; k < 7; k++) {
+      leds += `<rect x="${x + 3}" y="${-(64 - k * 8)}" width="16" height="5" rx="1" fill="#39404f"/>`
+        + `<circle ${on ? `class="fp-led" style="animation-delay:${((i * 0.37 + k * 0.53) % 2).toFixed(2)}s"` : ''} cx="${x + 16}" cy="${-(61.5 - k * 8)}" r="1.4" fill="${on ? (k % 3 ? '#4ade80' : '#38bdf8') : '#4b5263'}"/>`;
+    }
+    return cube(x, y, 0, 22, 24, 70, '#2b3140') + face(y + 24, leds);
+  }
+  function arcade(x, y) {
+    return cube(x, y, 0, 24, 20, 52, '#3b3f6b') + face(y + 20, `<rect class="fp-arcade" x="${x + 3}" y="-45" width="18" height="14" rx="2" fill="#7cf4ff"/><rect x="${x + 3}" y="-27" width="18" height="5" rx="1" fill="#e5735f"/><circle cx="${x + 8}" cy="-24.5" r="1.6" fill="#ffd166"/>`);
+  }
+  function pingpong(x, y) {
+    const leg = (lx, ly) => cube(lx, ly, 0, 3, 3, 14, '#59606d');
+    return leg(x + 4, y + 4) + leg(x + 63, y + 4) + leg(x + 4, y + 33) + leg(x + 63, y + 33) + cube(x, y, 14, 70, 40, 3, '#2f8f5b')
+      + flat(17, `<path d="M${x + 35} ${y}V${y + 40}M${x} ${y + 20}H${x + 70}" stroke="#fff" stroke-width="1"/>`) + cube(x + 34, y - 2, 17, 2, 44, 6, '#f1f1f1');
+  }
+  function beanbag(x, y, c) {
+    const [cx, cy] = P(x, y, 6);
+    return `<ellipse cx="${cx.toFixed(1)}" cy="${(cy + 4).toFixed(1)}" rx="15" ry="8" fill="${shade(c, -0.2)}"/><ellipse cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" rx="14" ry="9" fill="${c}"/><ellipse cx="${(cx - 4).toFixed(1)}" cy="${(cy - 3).toFixed(1)}" rx="5" ry="2.5" fill="#fff" opacity=".25"/>`;
+  }
+  // The coffee bar grows with each level: a kettle, a drip machine, an espresso machine, a bar, a roaster.
+  function coffee(lvl) {
+    if (!lvl) return '';
+    const w = [0, 8, 12, 22, 22, 22][lvl], h = [0, 10, 16, 17, 17, 17][lvl];
+    const [sx, sy] = P(66 + w / 2, 24, 29 + h + 3);
+    const steam = d => `<path class="fp-steam" style="animation-delay:${d}s" d="M${(sx + d * 8).toFixed(1)} ${sy.toFixed(1)}c-3-3 3-5 0-9" stroke="#a8a196" stroke-width="1.6" fill="none" stroke-linecap="round"/>`;
+    return cube(66, 20, 29, w, 12, h, lvl === 1 ? '#f1f3f5' : lvl === 2 ? '#3d4450' : '#aeb6bf')
+      + (lvl >= 3 ? face(32, `<rect x="69" y="${-(29 + h - 4)}" width="5" height="4" rx="1" fill="#e85d4a"/><rect x="77" y="${-(29 + h - 4)}" width="5" height="4" rx="1" fill="#3d4450"/>`) : '')
+      + steam(0) + (lvl >= 3 ? steam(0.8) : '');
+  }
+  function cooler(x, y) {
+    const [bx, by] = P(x + 6.5, y + 6.5, 36);
+    return cube(x, y, 0, 13, 13, 28, '#e9edf2') + `<g opacity=".85">${cube(x + 2, y + 2, 28, 9, 9, 15, '#a5d8f3')}</g>`
+      + [0, 0.8, 1.6].map((d, i) => `<circle class="fp-bub" style="animation-delay:${d}s" cx="${(bx - 2 + i * 2).toFixed(1)}" cy="${by.toFixed(1)}" r="1.2" fill="#fff"/>`).join('');
+  }
+  function cone(x, y) {
+    const [ax, ay] = P(x, y, 18), [bx, by] = P(x, y, 2);
+    return cube(x - 6, y - 6, 0, 12, 12, 2, '#d9480f')
+      + `<path d="M${ax.toFixed(1)} ${ay.toFixed(1)}L${(bx + 6).toFixed(1)} ${by.toFixed(1)}A6 3 0 0 1 ${(bx - 6).toFixed(1)} ${by.toFixed(1)}Z" fill="#fd7e14"/>`
+      + `<path d="M${(ax - 2.6).toFixed(1)} ${(ay + 7).toFixed(1)}h5.2l1.4 3.6h-8z" fill="#fff"/>`;
+  }
+  function crate(x, y, w, d, h) {
+    return cube(x, y, 0, w, d, h, '#c9a46c') + flat(h, `<rect x="${x + w / 2 - 2}" y="${y}" width="4" height="${d}" fill="#e8d4a6"/>`);
+  }
+  function board(x) { // the project office's kanban board, on the back wall
+    const notes = ['#ffd43b', '#ff8fab', '#8ce99a', '#74c0fc'];
+    let s = `<rect x="${x}" y="10" width="144" height="40" rx="2" fill="#fff" stroke="#c9c2b6" stroke-width="1.5"/><path d="M${x + 48} 14V46M${x + 96} 14V46" stroke="#e3ddd2"/>`;
+    for (let c = 0; c < 3; c++) for (let k = 0; k < 3 - c % 2; k++) s += `<rect x="${x + 8 + c * 48 + (k % 2) * 16}" y="${16 + Math.floor(k / 2) * 14 + (k % 2) * 4}" width="12" height="10" fill="${notes[(c + k) % 4]}"/>`;
+    return s;
+  }
+  function win(x, w) {
+    return `<rect x="${x}" y="12" width="${w}" height="44" fill="url(#ID-sky)"/>`
+      + [[0.2, 20], [0.55, 27], [0.8, 18]].map(([f, y]) => `<circle class="fp-star" cx="${(x + w * f).toFixed(1)}" cy="${y}" r="1" fill="#fff"/>`).join('')
+      + `<path d="M${x + w / 2} 12V56M${x} 34H${x + w}" stroke="#fff" stroke-width="2"/><rect x="${x}" y="12" width="${w}" height="44" fill="none" stroke="#fff" stroke-width="3"/><rect x="${x - 3}" y="56" width="${w + 6}" height="3" fill="#d6cdbf"/>`;
+  }
+
   const ZONE_RECTS = {
     kitchen: [16, 16, 180, 104], lounge: [16, 128, 180, 108], games: [16, 244, 180, 100],
     open: [204, 16, 312, 328],
     meeting: [524, 16, 180, 104], library: [524, 128, 180, 108], servers: [524, 244, 86, 100], lobby: [618, 244, 86, 100],
   };
-  const DESKS = (() => {
-    const out = [];
-    for (let row = 0; row < 4; row++) for (let col = 0; col < 3; col++) out.push({ x: 222 + col * 100, y: 34 + row * 80 });
-    return out;
-  })();
-  const deskSeat = i => ({ x: DESKS[i].x + 38, y: DESKS[i].y + 46 });
-  const MEETING_ROOMS = [[532, 24], [616, 24], [532, 74], [616, 74]];
+  const DESKS = [];
+  for (let row = 0; row < 4; row++) for (let col = 0; col < 3; col++) DESKS.push({ x: 226 + col * 98, y: 30 + row * 80 });
+  const ROOMS = [[530, 20], [614, 20], [530, 72], [614, 72]];
+  // Low walls between the zones, with gaps for doors: [x0, y0, x1, y1].
+  const PARTS = [
+    [198, 0, 202, 52], [198, 88, 202, 160], [198, 200, 202, 276], [198, 312, 202, 360],
+    [518, 0, 522, 52], [518, 88, 522, 160], [518, 200, 522, 276], [518, 312, 522, 360],
+    [0, 122, 70, 126], [110, 122, 198, 126], [0, 238, 70, 242], [110, 238, 198, 242],
+    [522, 122, 580, 126], [620, 122, 720, 126], [522, 238, 560, 242], [600, 238, 720, 242], [612, 242, 616, 300],
+  ];
+  // Where each upgrade goes, for the traffic cones while it is being built.
+  const SITES = { coffee: [34, 52], plants: [360, 336], desks: [300, 338], rooms: [574, 104], pmo: [660, 104], phones: [150, 150], lounge: [100, 214], recruit: [128, 160], library: [610, 222], servers: [570, 300], games: [120, 326], lobby: [668, 328] };
 
-  function plant(x, y, s = 1) {
-    return `<g transform="translate(${x} ${y}) scale(${s})"><circle cx="0" cy="-6" r="7" fill="#5fa86b"/><circle cx="-5" cy="-1" r="5" fill="#4e9a5c"/><circle cx="5" cy="-1" r="5" fill="#6bb877"/><rect x="-5" y="2" width="10" height="7" rx="2" fill="#b98157"/></g>`;
-  }
-  function label(x, y, text) {
-    return `<text x="${x}" y="${y}" font-size="9" font-weight="600" letter-spacing=".8" fill="#9a9384">${text.toUpperCase()}</text>`;
-  }
-  function locked(z, text) {
-    const [x, y, w, h] = ZONE_RECTS[z];
-    return `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="url(#fp-hatch)" stroke="#d8d2c6" stroke-dasharray="4 4"/>`
-      + `<text x="${x + w / 2}" y="${y + h / 2}" text-anchor="middle" font-size="9.5" fill="#a39c8f">${text}</text>`;
+  // Painter's order for boxes on a floor: a box is drawn before every box that stands in front of it along x or y.
+  function depthSort(items) {
+    const n = items.length, indeg = new Array(n).fill(0), next = items.map(() => []);
+    const before = (a, b) => (a.x1 <= b.x0 && a.y0 < b.y1) || (a.y1 <= b.y0 && a.x0 < b.x1);
+    for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) if (i !== j && before(items[i], items[j])) { next[i].push(j); indeg[j]++; }
+    const depth = i => items[i].x0 + items[i].y0;
+    const ready = [], order = [];
+    for (let i = 0; i < n; i++) if (!indeg[i]) ready.push(i);
+    while (ready.length) {
+      ready.sort((a, b) => depth(b) - depth(a));
+      const i = ready.pop();
+      order.push(i);
+      for (const j of next[i]) if (!--indeg[j]) ready.push(j);
+    }
+    if (order.length < n) for (let i = 0; i < n; i++) if (!order.includes(i)) order.push(i); // a cycle: draw the rest anyway
+    return order.map(i => items[i]);
   }
 
-  // m: { lv: office levels, funding, zones: {zone: unlockLabel|null}, desks: count }
+  // m: { lv: office levels, zones: {zone: lock label or null}, desks: count, building: [office ids], id: prefix for SVG ids }
   function floor(m) {
-    const lv = id => m.lv[id] || 0;
-    const z = id => !m.zones[id];
-    const out = [`<svg viewBox="0 0 ${FP.w} ${FP.h}" xmlns="http://www.w3.org/2000/svg" class="fp-svg" role="img" aria-label="Office floor plan">`,
-      '<defs><pattern id="fp-hatch" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="8" height="8" fill="#f1eee8"/><line x1="0" y1="0" x2="0" y2="8" stroke="#e4dfd5" stroke-width="3"/></pattern></defs>',
-      `<rect x="6" y="6" width="${FP.w - 12}" height="${FP.h - 12}" rx="6" fill="#f6f3ed" stroke="#cfc8bb" stroke-width="5"/>`];
-    // windows along the top wall
-    for (let x = 40; x < FP.w - 40; x += 70) out.push(`<rect x="${x}" y="4" width="44" height="5" rx="2" fill="#bfe0f2"/>`);
+    const id = m.id || 'fp';
+    const lv = k => m.lv[k] || 0;
+    const open = z => !m.zones[z];
+    const items = [];
+    const put = (x0, y0, x1, y1, s) => items.push({ x0, y0, x1, y1, s });
+    const out = [`<svg viewBox="0 0 ${VB.w} ${VB.h}" xmlns="http://www.w3.org/2000/svg" class="fp-svg" role="img" aria-label="The office">`,
+      `<defs><linearGradient id="${id}-sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:var(--sky1,#8fcaf0)"/><stop offset="1" style="stop-color:var(--sky2,#dcf0fb)"/></linearGradient>`,
+      `<radialGradient id="${id}-bg" cx="50%" cy="38%" r="72%"><stop offset="0" style="stop-color:var(--fp-bg1,#f4f6f9)"/><stop offset="1" style="stop-color:var(--fp-bg2,#dfe5ec)"/></radialGradient>`,
+      `<pattern id="${id}-wood" width="64" height="16" patternUnits="userSpaceOnUse"><rect width="64" height="16" fill="#ead8b8"/><rect y="8" width="64" height="8" fill="#e5d1ae"/><path d="M0 8H64M0 16H64M22 0V8M54 8V16" stroke="#d8c09a" stroke-width=".8"/></pattern>`,
+      `<pattern id="${id}-oak" width="64" height="16" patternUnits="userSpaceOnUse"><rect width="64" height="16" fill="#d9bd92"/><rect y="8" width="64" height="8" fill="#d3b689"/><path d="M0 8H64M0 16H64M14 0V8M44 8V16" stroke="#c4a577" stroke-width=".8"/></pattern>`,
+      `<pattern id="${id}-tile" width="20" height="20" patternUnits="userSpaceOnUse"><rect width="20" height="20" fill="#f4f1ea"/><path d="M0 0H10V10H0ZM10 10H20V20H10Z" fill="#e6dfd2"/></pattern>`,
+      `<pattern id="${id}-grid" width="22" height="22" patternUnits="userSpaceOnUse"><rect width="22" height="22" fill="#d6dbe2"/><path d="M0 .5H22M.5 0V22" stroke="#c2c8d1"/></pattern>`,
+      `<pattern id="${id}-stone" width="36" height="36" patternUnits="userSpaceOnUse"><rect width="36" height="36" fill="#f3f0ea"/><path d="M0 .5H36M.5 0V36" stroke="#e2ddd4"/></pattern>`,
+      `<pattern id="${id}-hatch" width="10" height="10" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="10" height="10" fill="#e2ded6"/><rect width="4" height="10" fill="#d8d3c9"/></pattern></defs>`,
+      `<rect width="${VB.w}" height="${VB.h}" fill="url(#${id}-bg)"/>`];
+
+    // the slab the office stands on, and its shadow
+    out.push(poly([P(-4, -4, -SLAB - 8), P(FW + 14, -4, -SLAB - 8), P(FW + 14, FD + 14, -SLAB - 8), P(-4, FD + 14, -SLAB - 8)], '#1d2939', ' opacity=".06"'));
+    out.push(poly([P(0, FD, 0), P(FW, FD, 0), P(FW, FD, -SLAB), P(0, FD, -SLAB)], '#d9d0c1'));
+    out.push(poly([P(FW, 0, 0), P(FW, FD, 0), P(FW, FD, -SLAB), P(FW, 0, -SLAB)], '#c4baa9'));
+
+    // floors: each zone has its own material; zones still locked are bare concrete behind tape
+    const mat = { kitchen: 'tile', open: 'wood', meeting: '#dde6ef', lounge: '#ebe2f3', games: '#dcece2', library: 'oak', servers: 'grid', lobby: 'stone' };
+    const f = [`<rect width="${FW}" height="${FD}" fill="#ebe6dc"/>`];
+    for (const [z, [x, y, w, h]] of Object.entries(ZONE_RECTS)) {
+      const c = open(z) ? mat[z] : 'hatch';
+      f.push(`<rect x="${x - 4}" y="${y - 4}" width="${w + 8}" height="${h + 8}" fill="${c[0] === '#' ? c : `url(#${id}-${c})`}"/>`);
+      if (!open(z)) f.push(`<rect x="${x + 6}" y="${y + 6}" width="${w - 12}" height="${h - 12}" fill="none" stroke="#f2c94c" stroke-width="5"/><rect x="${x + 6}" y="${y + 6}" width="${w - 12}" height="${h - 12}" fill="none" stroke="#3b3833" stroke-width="5" stroke-dasharray="8 8"/>`);
+    }
+    if (open('lounge')) f.push('<rect x="34" y="146" width="116" height="80" rx="14" fill="#d9c8ee"/>');
+    if (open('library')) f.push('<circle cx="590" cy="200" r="28" fill="#c9a07d"/>');
+    if (open('lobby')) f.push('<rect x="644" y="344" width="44" height="14" rx="2" fill="#5b6170"/>');
+    DESKS.forEach((d, i) => { if (i >= m.desks) f.push(`<rect x="${d.x}" y="${d.y}" width="56" height="28" rx="2" fill="none" stroke="#cdb38c" stroke-width="1.5" stroke-dasharray="4 4"/>`); });
+    if (open('meeting')) ROOMS.forEach(([x, y], i) => { if (i >= lv('rooms')) f.push(`<rect x="${x}" y="${y}" width="78" height="44" fill="none" stroke="#a9bfd3" stroke-width="1.5" stroke-dasharray="4 4"/>`); });
+    out.push(flat(0, f.join('')));
+
+    // the two back walls, their caps and ends
+    out.push(poly([P(0, 0, 0), P(0, FD, 0), P(0, FD, WALL), P(0, 0, WALL)], '#e8e2d7'));
+    out.push(poly([P(0, 0, 0), P(FW, 0, 0), P(FW, 0, WALL), P(0, 0, WALL)], '#f4f0e9'));
+    out.push(poly([P(-7, -7, WALL), P(FW, -7, WALL), P(FW, 0, WALL), P(0, 0, WALL), P(0, FD, WALL), P(-7, FD, WALL)], '#cec5b6'));
+    out.push(poly([P(FW, -7, WALL), P(FW, 0, WALL), P(FW, 0, -SLAB), P(FW, -7, -SLAB)], '#b9af9f'));
+    out.push(poly([P(-7, FD, WALL), P(0, FD, WALL), P(0, FD, -SLAB), P(-7, FD, -SLAB)], '#d2c9ba'));
+    const R = [`<rect x="0" y="${WALL - 5}" width="${FW}" height="5" fill="#ddd5c8"/>`, win(222, 76), win(314, 76), win(406, 76)];
+    R.push(lv('pmo') ? board(546) : win(540, 70) + win(628, 70));
+    R.push('<circle cx="176" cy="24" r="10" fill="#fff" stroke="#3a4252" stroke-width="2"/><line class="fp-hh" x1="176" y1="24" x2="176" y2="18.5" stroke="#3a4252" stroke-width="2.2" stroke-linecap="round"/><line class="fp-mh" x1="176" y1="24" x2="176" y2="16" stroke="#3a4252" stroke-width="1.4" stroke-linecap="round"/>');
+    out.push(wallR(R.join('').replace(/ID-sky/g, id + '-sky')));
+    const L = [`<rect x="0" y="${WALL - 5}" width="${FD}" height="5" fill="#d5cdc0"/>`];
+    L.push('<rect x="258" y="17" width="26" height="26" rx="5" fill="#005f73"/><text x="271" y="36" text-anchor="middle" font-size="17" font-weight="700" fill="#fff" font-family="system-ui,sans-serif">A</text><text x="292" y="36" font-size="15" font-weight="700" letter-spacing="2" fill="#005f73" font-family="system-ui,sans-serif">ATLAS</text>');
+    L.push(open('lounge') && lv('lounge') >= 2 ? '<rect x="148" y="16" width="62" height="36" rx="2" fill="#20242c"/><rect class="fp-tv" x="151" y="19" width="56" height="30" fill="#4c8bd6"/>' : win(140, 80));
+    L.push(win(44, 64));
+    if (open('games') && lv('games')) L.push('<circle cx="24" cy="30" r="10" fill="#2f2f2f"/><circle cx="24" cy="30" r="7" fill="#e5735f"/><circle cx="24" cy="30" r="4" fill="#f4e9d8"/><circle cx="24" cy="30" r="1.6" fill="#2f8f5b"/>');
+    out.push(wallL(L.join('').replace(/ID-sky/g, id + '-sky')));
+    out.push(cube(22, 0, 52, 124, 9, 20, '#e4dccd') + face(9, [53, 84, 115].map(x => `<path d="M${x} -54V-70" stroke="#cfc4b2" stroke-width="1"/>`).join('')));
+
+    // ------------------------------------------------ what stands on the floor
+    for (const [x0, y0, x1, y1] of PARTS) put(x0, y0, x1, y1, cube(x0, y0, 0, x1 - x0, y1 - y0, 16, '#e5dfd4'));
 
     // kitchen
-    out.push(label(24, 30, 'Kitchen'));
-    out.push('<rect x="20" y="38" width="96" height="16" rx="3" fill="#ddd6c8"/><rect x="124" y="36" width="22" height="34" rx="3" fill="#e9edf2" stroke="#d3d9e0"/><circle cx="40" cy="46" r="5" fill="#cbd5df"/>');
-    const coffee = lv('coffee');
-    if (coffee) {
-      const w = 10 + coffee * 5;
-      out.push(`<rect x="${58}" y="39" width="${w}" height="13" rx="2.5" fill="#3d4450"/><rect x="${60}" y="41" width="5" height="5" rx="1" fill="#e85d4a"/>`);
-      out.push(`<g class="fp-steam"><path d="M${60 + w / 2} 36c-2-2 2-3 0-6" stroke="#b9b3a8" stroke-width="1.4" fill="none" stroke-linecap="round"/></g>`);
-      if (coffee >= 4) out.push('<rect x="92" y="40" width="20" height="11" rx="2" fill="#7b5a3a"/><circle cx="97" cy="45.5" r="2" fill="#f4e9d8"/><circle cx="106" cy="45.5" r="2" fill="#f4e9d8"/>');
-    } else out.push('<text x="60" y="49" font-size="8" fill="#b0a99c">coffee bar</text>');
-    out.push('<circle cx="80" cy="92" r="16" fill="#e3d7c3"/><circle cx="58" cy="92" r="5" fill="#cbd2dc"/><circle cx="102" cy="92" r="5" fill="#cbd2dc"/><circle cx="80" cy="113" r="5" fill="#cbd2dc"/>');
-
-    // open plan desks
-    out.push(label(212, 30, 'Open plan'));
-    for (let i = 0; i < DESKS.length; i++) {
-      const d = DESKS[i];
-      if (i < m.desks) {
-        out.push(`<rect x="${d.x}" y="${d.y}" width="76" height="26" rx="3" fill="#e8d9bf" stroke="#d8c6a6"/><rect x="${d.x + 26}" y="${d.y + 3}" width="24" height="5" rx="1.5" fill="#3a4252"/>`);
-        out.push(`<circle cx="${d.x + 38}" cy="${d.y + 44}" r="9" fill="#cdd4de"/>`);
-      } else {
-        out.push(`<rect x="${d.x}" y="${d.y}" width="76" height="26" rx="3" fill="none" stroke="#ddd7cc" stroke-dasharray="3 3"/>`);
-      }
+    put(18, 16, 148, 44, cube(18, 16, 0, 130, 26, 26, '#c9bca8') + cube(17, 15, 26, 132, 28, 3, '#f4f0e9') + flat(29, '<rect x="28" y="20" width="22" height="16" rx="2" fill="#c3ccd6"/>') + coffee(lv('coffee')));
+    put(154, 16, 188, 44, cube(154, 16, 0, 34, 28, 64, '#eef1f4') + face(44, '<path d="M156 -40H186" stroke="#c9d1db" stroke-width="1.2"/><rect x="180" y="-36" width="2" height="14" fill="#aab4c0"/>'));
+    put(56, 62, 124, 94, cube(87, 75, 0, 6, 6, 15, METAL) + cube(56, 62, 15, 68, 32, 3, WOOD));
+    for (const [sx, sy] of [[62, 100], [84, 100], [106, 100], [40, 72]]) put(sx, sy, sx + 10, sy + 10, cube(sx, sy, 0, 10, 10, 11, '#e07a5f'));
+    if (lv('coffee') >= 4) {
+      put(150, 62, 190, 102, cube(150, 62, 0, 40, 40, 27, '#6b4a33') + cube(149, 61, 27, 42, 42, 3, '#3a2a1e') + cube(160, 66, 30, 22, 12, 15, '#c9a227')
+        + (lv('coffee') >= 5 ? cube(158, 84, 30, 16, 14, 14, '#2b2b2b') + cube(162, 88, 44, 8, 6, 6, '#c0392b') : ''));
     }
-    // plants spread around as you buy them
-    const spots = [[30, 340], [200, 340], [510, 40], [520, 340], [175, 125]];
-    for (let i = 0; i < Math.min(lv('plants'), spots.length); i++) out.push(plant(spots[i][0], spots[i][1] - 12, 0.9));
+
+    // open plan
+    DESKS.forEach((d, i) => { if (i < m.desks) put(d.x, d.y, d.x + 56, d.y + 48, desk(d.x, d.y, lv('desks')) + chair(d.x + 21, d.y + 34)); });
+    put(494, 18, 507, 31, cooler(494, 18));
+    [[206, 330], [500, 336], [500, 160], [206, 160], [356, 340]].slice(0, lv('plants')).forEach(([x, y]) => put(x, y, x + 12, y + 12, plant(x, y)));
+    if (lv('desks') >= 2) put(486, 286, 510, 308, cube(486, 286, 0, 24, 22, 22, '#dfe3e8') + cube(488, 288, 22, 20, 18, 4, '#c5ccd5'));
 
     // meeting rooms
-    if (z('meeting')) {
-      out.push(label(532, 21, 'Meeting rooms'));
-      MEETING_ROOMS.forEach(([x, y], i) => {
-        if (i < lv('rooms')) {
-          out.push(`<rect x="${x}" y="${y}" width="80" height="44" rx="3" fill="#f3f9fc" stroke="#9cc9e3" stroke-width="1.6"/><rect x="${x + 22}" y="${y + 14}" width="36" height="16" rx="6" fill="#d9c3a3"/>`);
-          [[x + 16, y + 22], [x + 64, y + 22], [x + 40, y + 9], [x + 40, y + 36]].forEach(([cx, cy]) => out.push(`<circle cx="${cx}" cy="${cy}" r="3.6" fill="#cdd4de"/>`));
-        } else out.push(`<rect x="${x}" y="${y}" width="80" height="44" rx="3" fill="none" stroke="#d8d2c6" stroke-dasharray="3 3"/><text x="${x + 40}" y="${y + 26}" text-anchor="middle" font-size="8.5" fill="#b0a99c">room ${i + 1}</text>`);
-      });
-    } else out.push(locked('meeting', m.zones.meeting));
+    if (open('meeting')) ROOMS.forEach(([x, y], i) => { if (i < lv('rooms')) put(x, y, x + 78, y + 44, room(x, y)); });
 
     // lounge
-    if (z('lounge')) {
-      out.push(label(24, 143, 'Lounge'));
-      out.push('<rect x="34" y="166" width="96" height="54" rx="10" fill="#ece1f6"/>');
-      if (lv('lounge')) out.push('<path d="M40 160H120V172H52V196H40Z" fill="#8193b5"/><rect x="72" y="182" width="34" height="18" rx="4" fill="#d9c3a3"/>');
-      const booths = Math.min(4, Math.ceil(lv('phones') / 2));
-      for (let i = 0; i < booths; i++) out.push(`<rect x="${150}" y="${150 + i * 21}" width="20" height="18" rx="3" fill="#dfe9e4" stroke="#9fc4b0"/>`);
-      if (lv('pmo')) out.push('<rect x="40" y="222" width="54" height="10" rx="2" fill="#3a4252"/><text x="98" y="230" font-size="7.5" fill="#9a9384">PMO</text>');
-      if (lv('recruit')) out.push('<rect x="110" y="222" width="28" height="10" rx="2" fill="#c9b18a"/>');
-    } else out.push(locked('lounge', m.zones.lounge));
+    if (open('lounge')) {
+      if (lv('lounge')) {
+        put(18, 150, 44, 216, sofa(18, 150, 66, '#7d8fb5'));
+        put(62, 170, 96, 194, cube(62, 170, 0, 34, 24, 11, '#d9c3a3'));
+      }
+      if (lv('lounge') >= 2) put(122, 138, 128, 144, lamp(122, 138));
+      if (lv('lounge') >= 3) {
+        const [fx, fy] = P(78, 136, 22);
+        put(58, 130, 98, 142, cube(58, 130, 0, 40, 12, 12, '#59606d') + `<g opacity=".8">${cube(58, 130, 12, 40, 12, 18, '#5fb6e0')}</g>`
+          + `<g class="fp-fish"><path d="M${fx.toFixed(1)} ${fy.toFixed(1)}l5-2.5v5z M${(fx - 7).toFixed(1)} ${fy.toFixed(1)}a3.5 2.2 0 1 0 7 0a3.5 2.2 0 1 0 -7 0" fill="#ff922b"/></g>`);
+      }
+      for (let i = 0; i < Math.min(4, Math.ceil(lv('phones') / 2)); i++) put(162, 132 + i * 26, 188, 156 + i * 26, booth(162, 132 + i * 26));
+      if (lv('recruit')) put(104, 132, 144, 148, cube(104, 132, 0, 40, 16, 20, '#c9b18a') + cube(146, 130, 0, 6, 4, 46, '#005f73'));
+    }
 
     // game room
-    if (z('games')) {
-      out.push(label(24, 259, 'Game room'));
-      if (lv('games')) out.push('<rect x="40" y="276" width="70" height="38" rx="3" fill="#2f8f5b" stroke="#25744a"/><path d="M75 276V314" stroke="#fff" stroke-width="1.5"/>');
-      if (lv('games') >= 2) out.push('<rect x="130" y="270" width="26" height="40" rx="3" fill="#3b3f6b"/><rect x="134" y="275" width="18" height="12" rx="1" fill="#7cf4ff"/>');
-      if (lv('games') >= 3) out.push('<circle cx="60" cy="330" r="8" fill="#f4a259"/><circle cx="84" cy="331" r="8" fill="#e5735f"/>');
-    } else out.push(locked('games', m.zones.games));
+    if (open('games')) {
+      if (lv('games')) put(40, 268, 110, 308, pingpong(40, 268));
+      if (lv('games') >= 2) put(150, 250, 174, 270, arcade(150, 250));
+      if (lv('games') >= 3) { put(56, 322, 74, 336, beanbag(64, 328, '#f4a259')); put(90, 324, 108, 338, beanbag(98, 330, '#e5735f')); }
+    }
 
     // library
-    if (z('library')) {
-      out.push(label(532, 143, 'Library'));
-      const shelves = Math.max(1, Math.min(4, Math.ceil(lv('library') / 3)));
-      const books = ['#c0392b', '#2f6db5', '#e0a800', '#3f8f5a', '#7a3fd1'];
-      for (let i = 0; i < shelves; i++) {
-        const x = 532 + i * 42;
-        out.push(`<rect x="${x}" y="152" width="36" height="12" rx="2" fill="#a7835d"/>`);
-        for (let b = 0; b < 6; b++) out.push(`<rect x="${x + 2 + b * 5.6}" y="154" width="4" height="8" fill="${books[(i + b) % books.length]}"/>`);
+    if (open('library')) {
+      for (let i = 0; i < Math.max(1, Math.min(4, Math.ceil(lv('library') / 3))); i++) put(530 + i * 44, 130, 570 + i * 44, 142, shelf(530 + i * 44, 130, i));
+      if (lv('library')) {
+        put(568, 188, 592, 210, cube(568, 188, 0, 24, 22, 10, '#9c6644') + cube(568, 188, 0, 6, 22, 24, '#8a5a3c'));
+        put(606, 184, 612, 190, lamp(606, 184));
       }
-      if (lv('library')) out.push('<circle cx="580" cy="205" r="10" fill="#d9c3a3"/><circle cx="560" cy="205" r="5" fill="#cdd4de"/><circle cx="600" cy="205" r="5" fill="#cdd4de"/>');
-    } else out.push(locked('library', m.zones.library));
+    }
 
     // server room
-    if (z('servers')) {
-      out.push(label(532, 259, 'Servers'));
-      const racks = Math.max(1, Math.min(3, Math.ceil(lv('servers') / 4)));
-      for (let i = 0; i < racks; i++) {
-        const x = 534 + i * 24;
-        out.push(`<rect x="${x}" y="268" width="18" height="64" rx="2" fill="#2b3140"/>`);
-        for (let k = 0; k < 6; k++) out.push(`<circle class="fp-led" style="animation-delay:${(i * 0.37 + k * 0.53) % 2}s" cx="${x + 5}" cy="${275 + k * 10}" r="1.5" fill="${lv('servers') ? '#4ade80' : '#3b4252'}"/>`);
-      }
-    } else out.push(locked('servers', m.zones.servers));
+    if (open('servers')) {
+      for (let i = 0; i < Math.max(1, Math.min(3, Math.ceil(lv('servers') / 4))); i++) put(530 + i * 26, 250, 552 + i * 26, 274, rack(530 + i * 26, 250, lv('servers') > 0, i));
+      put(540, 308, 572, 328, cube(540, 308, 0, 32, 20, 28, '#e9edf2') + face(328, '<path d="M544 -8H568M544 -12H568M544 -16H568" stroke="#c5ccd5" stroke-width="1.5"/>'));
+    }
 
     // lobby
-    if (z('lobby')) {
-      out.push(label(624, 259, 'Lobby'));
-      if (lv('lobby')) out.push('<path d="M630 300Q661 284 692 300V310H630Z" fill="#d9c3a3"/><text x="661" y="333" text-anchor="middle" font-size="9" font-weight="700" fill="#005f73" letter-spacing="1.5">ATLAS</text>');
-      out.push(plant(694, 330, 0.8));
-    } else out.push(locked('lobby', m.zones.lobby));
+    if (open('lobby')) {
+      put(640, 250, 672, 258, cube(640, 250, 0, 32, 8, 66, '#005f73') + face(258, '<rect x="649" y="-56" width="14" height="14" rx="3" fill="#fff"/><text x="656" y="-45" text-anchor="middle" font-size="11" font-weight="800" fill="#005f73" font-family="system-ui,sans-serif">A</text>'));
+      if (lv('lobby')) put(632, 288, 694, 306, cube(632, 288, 0, 62, 18, 26, '#efe9df') + cube(631, 287, 26, 64, 20, 3, '#c9a77c')
+        + face(306, '<text x="663" y="-9" text-anchor="middle" font-size="10" font-weight="800" letter-spacing="2.5" fill="#005f73" font-family="system-ui,sans-serif">ATLAS</text>'));
+      put(622, 326, 635, 339, plant(622, 326, 1.1));
+      put(690, 250, 701, 261, plant(690, 250, 0.9));
+    }
 
-    // internal walls
-    out.push('<path d="M196 12V348M520 12V348M12 120H196M12 240H196M520 124H708M520 240H708M614 240V348" stroke="#ddd6c9" stroke-width="2.5"/>');
+    // zones not open yet: a few moving boxes behind the tape
+    for (const [z, [x, y, w, h]] of Object.entries(ZONE_RECTS)) {
+      if (open(z)) continue;
+      const cx = x + w / 2, cy = y + h / 2;
+      put(cx - 22, cy - 4, cx - 2, cy + 12, crate(cx - 22, cy - 4, 20, 16, 14));
+      put(cx + 2, cy + 2, cx + 18, cy + 16, crate(cx + 2, cy + 2, 16, 14, 11));
+    }
+    // upgrades under construction get traffic cones
+    for (const b of m.building || []) {
+      const s = SITES[b];
+      if (s) { put(s[0] - 6, s[1] - 6, s[0] + 6, s[1] + 6, cone(s[0], s[1])); put(s[0] + 12, s[1] - 2, s[0] + 24, s[1] + 10, cone(s[0] + 18, s[1] + 4)); }
+    }
+
+    for (const it of depthSort(items)) out.push(it.s);
     out.push('</svg>');
     return out.join('');
   }
 
-  // Where someone stands on the floor plan, as % of the plan's width/height.
+  // Where someone stands, as % of the picture's width and height.
+  const SEATS = { coffee: [[52, 114], [92, 116], [132, 112], [42, 60]], lounge: [[31, 172], [31, 198], [80, 210], [116, 176]] };
+  const pct = (x, y) => { const [sx, sy] = P(x, y); return { x: (sx / VB.w) * 100, y: (sy / VB.h) * 100 }; };
   function spot(kind, index = 0) {
-    let p;
-    if (kind === 'desk') p = deskSeat(index % DESKS.length);
-    else if (kind === 'coffee') p = [{ x: 58, y: 92 }, { x: 102, y: 92 }, { x: 80, y: 113 }, { x: 40, y: 72 }][index % 4];
-    else if (kind === 'lounge') p = [{ x: 60, y: 186 }, { x: 88, y: 168 }, { x: 112, y: 168 }][index % 3];
-    else if (kind === 'meeting') { const [x, y] = MEETING_ROOMS[Math.floor(index / 4) % 4]; p = [{ x: x + 16, y: y + 22 }, { x: x + 64, y: y + 22 }, { x: x + 40, y: y + 9 }, { x: x + 40, y: y + 36 }][index % 4]; }
-    else p = { x: 360, y: 340 };
-    return { x: (p.x / FP.w) * 100, y: (p.y / FP.h) * 100 };
+    if (kind === 'desk') { const d = DESKS[index % DESKS.length]; return pct(d.x + 28, d.y + 46); }
+    if (kind === 'meeting') {
+      const [x, y] = ROOMS[Math.floor(index / 4) % 4];
+      return pct(...[[x + 31, y + 41], [x + 49, y + 41], [x + 68, y + 24], [x + 12, y + 26]][index % 4]);
+    }
+    const list = SEATS[kind];
+    return list ? pct(...list[index % list.length]) : pct(360, 340);
+  }
+  const zoneSpot = z => { const [x, y, w, h] = ZONE_RECTS[z]; return pct(x + w / 2, y + h / 2); };
+
+  // ------------------------------------------------------------------ splash art for rare hires
+  // The person as a large bust over light rays, in the colours of their rarity. 300 × 360.
+  const SPLASH = {
+    4: { bg: ['#3b1600', '#d9822b'], ray: ['#ffd27a'] },
+    5: { bg: ['#1b0a38', '#9c2f8f'], ray: ['#ffe066', '#ff8787', '#da77f2', '#74c0fc', '#8ce99a'] },
+  };
+  function splash(look, r) {
+    const k = SPLASH[r] || SPLASH[4], id = 'sp' + r;
+    const rays = Array.from({ length: 18 }, (_, i) => {
+      const a = (i * 20 * Math.PI) / 180, b = a + 0.13;
+      return `<path d="M150 150L${(150 + 320 * Math.cos(a)).toFixed(1)} ${(150 + 320 * Math.sin(a)).toFixed(1)}L${(150 + 320 * Math.cos(b)).toFixed(1)} ${(150 + 320 * Math.sin(b)).toFixed(1)}Z" fill="${k.ray[i % k.ray.length]}"/>`;
+    }).join('');
+    const star = (x, y, s, d) => `<path class="sp-tw" style="animation-delay:${d}s" transform="translate(${x} ${y}) scale(${s})" d="M0 -10L2.4 -2.4L10 0L2.4 2.4L0 10L-2.4 2.4L-10 0L-2.4 -2.4Z" fill="#fff"/>`;
+    return `<svg viewBox="0 0 300 360" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">`
+      + `<defs><radialGradient id="${id}-g" cx="50%" cy="40%" r="75%"><stop offset="0" stop-color="${k.bg[1]}"/><stop offset="1" stop-color="${k.bg[0]}"/></radialGradient>`
+      + `<radialGradient id="${id}-h" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#fff" stop-opacity=".6"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient></defs>`
+      + `<rect width="300" height="360" fill="url(#${id}-g)"/><g class="sp-rays" opacity=".24">${rays}</g><circle cx="150" cy="150" r="125" fill="url(#${id}-h)"/>`
+      + star(46, 58, 1, 0) + star(254, 92, 0.8, 0.7) + star(64, 226, 0.6, 1.3) + star(240, 212, 1.1, 0.4) + star(212, 38, 0.5, 1.8)
+      + `<g transform="translate(22 104) scale(4)">${avatar(look, { bare: true })}</g></svg>`;
   }
 
-  return { avatar, logo, gearIcon, roleIcon, moodFace, STAR, floor, spot, box, chart, chartScale, DESK_COUNT: DESKS.length, RARITY_COLORS, shade };
+  return { avatar, logo, gearIcon, roleIcon, moodFace, STAR, floor, spot, zoneSpot, splash, box, chart, chartScale, DESK_COUNT: DESKS.length, FLOOR_W: VB.w, FLOOR_H: VB.h, RARITY_COLORS, shade };
 })();

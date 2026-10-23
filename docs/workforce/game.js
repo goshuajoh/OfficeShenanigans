@@ -90,7 +90,7 @@
     return { cls: '', text: 'Available' };
   }
   const sizeLabel = o => `${D.SIZES[o.size].name} · ${fmtDur(o.dur)}`;
-  const abilityHtml = p => (p.ability ? `<div class="ability"><b>⚡ ${esc(p.ability.name)}</b><span>${esc(p.ability.desc)}</span></div>` : '');
+  const abilityHtml = p => (p.ability ? `<div class="ability"><b>${icon('bolt')}${esc(p.ability.name)}</b><span>${esc(p.ability.desc)}</span></div>` : '');
   const pct = (v, digits = 1) => `${v >= 0 ? '▲' : '▼'} ${Math.abs(v * 100).toFixed(digits)}%`;
   const upDown = v => (v >= 0 ? 'gain' : 'loss');
 
@@ -111,6 +111,35 @@
     install: '<rect x="7" y="2.5" width="10" height="19" rx="2"/><path d="M12 7v7M9 11l3 3 3-3"/>',
     breaks: '<path d="M5 9h11v5a5 5 0 0 1-5 5h-1a5 5 0 0 1-5-5z"/><path d="M16 10.5h1.5a2.5 2.5 0 0 1 0 5H16M8.5 3.5c-.6 1 .6 1.6 0 2.8M12 3.5c-.6 1 .6 1.6 0 2.8"/>',
     investors: '<path d="M4 19h16M5 15l4.5-4.5 3.5 3 6-6.5"/><path d="M15 7h4v4"/>',
+    check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
+    play: '<path d="M8 5.5v13l10-6.5z"/>',
+    gift: '<rect x="4" y="10" width="16" height="10" rx="1.5"/><path d="M3 7h18v3H3zM12 7v13M12 7C10.5 3.5 6.5 3.5 7 6c.3 1 2.5 1 5 1M12 7c1.5-3.5 5.5-3.5 5-1-.3 1-2.5 1-5 1"/>',
+    hourglass: '<path d="M7 3h10M7 21h10M8 3v3a4 4 0 0 0 1.6 3.2L12 11l2.4-1.8A4 4 0 0 0 16 6V3M8 21v-3a4 4 0 0 1 1.6-3.2L12 13l2.4 1.8A4 4 0 0 1 16 18v3"/>',
+    target: '<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1" fill="currentColor"/>',
+    bolt: '<path d="M13 2.5L5 13.5h6l-1 8 8-11h-6z" fill="currentColor" stroke="none"/>',
+    phone: '<path d="M6.5 3.5h3l1.5 4-2 1.5a11 11 0 0 0 6 6l1.5-2 4 1.5v3a2 2 0 0 1-2 2A16 16 0 0 1 4.5 5.5a2 2 0 0 1 2-2z"/>',
+    medal: '<circle cx="12" cy="15" r="5.5"/><path d="M8.5 10.5L6 3h4l2 5 2-5h4l-2.5 7.5"/>',
+    coins: '<ellipse cx="12" cy="6.5" rx="7" ry="3"/><path d="M5 6.5v5c0 1.7 3.1 3 7 3s7-1.3 7-3v-5M5 11.5v5c0 1.7 3.1 3 7 3s7-1.3 7-3v-5"/>',
+    robot: '<rect x="5" y="8" width="14" height="11" rx="3"/><path d="M12 8V5M9.5 16h5"/><circle cx="12" cy="4" r="1"/><circle cx="9.5" cy="12.5" r="1" fill="currentColor"/><circle cx="14.5" cy="12.5" r="1" fill="currentColor"/>',
+    crane: '<path d="M3 21h10M6 21V4l13 3.5M6 4L4 7h4M17 7v5"/><rect x="15.5" y="12" width="3" height="3"/>',
+    bell: '<path d="M6 16v-5a6 6 0 0 1 12 0v5l1.5 2h-15zM10 20.5a2 2 0 0 0 4 0"/>',
+    lock: '<rect x="5" y="10.5" width="14" height="10" rx="2"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5"/>',
+    tiles: '<rect x="3.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.5"/>',
+    tray: '<path d="M3.5 13.5l2.5-8h12l2.5 8v5a1 1 0 0 1-1 1h-15a1 1 0 0 1-1-1z"/><path d="M3.5 13.5h5l1 2h5l1-2h5"/>',
+    tower: '<rect x="6.5" y="15" width="11" height="5.5" rx="1"/><rect x="7.5" y="9.5" width="9" height="5.5" rx="1"/><rect x="8.5" y="4" width="7" height="5.5" rx="1"/>',
+    clock: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
+    mail: '<rect x="3.5" y="5.5" width="17" height="13" rx="2"/><path d="M4 7l8 6 8-6"/>',
+    calendar: '<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M8.5 3v4M15.5 3v4"/>',
+    star: '<path d="M12 2.8L14.9 8.7L21.4 9.6L16.7 14.2L17.8 20.6L12 17.6L6.2 20.6L7.3 14.2L2.6 9.6L9.1 8.7Z" fill="currentColor" stroke="none"/>',
+    hook: '<path d="M14 3.5v9.5a4.5 4.5 0 0 1-9 0v-2l3 2.5"/><circle cx="14" cy="3" r="1"/>',
+    cloud: '<path d="M7 18.5a4 4 0 0 1-.5-8 5.5 5.5 0 0 1 10.6-1.2A4.2 4.2 0 0 1 17.5 18.5z"/>',
+    paw: '<g fill="currentColor" stroke="none"><circle cx="6.5" cy="10" r="2"/><circle cx="10.5" cy="6.5" r="2"/><circle cx="15" cy="7" r="2"/><circle cx="18" cy="11" r="2"/><path d="M8 17.5c0-3 2-5.5 4.5-5.5s4.5 2.5 4.5 5.5c0 1.6-1.6 2.5-4.5 2.5S8 19.1 8 17.5z"/></g>',
+    flame: '<path d="M12 21c-3.6 0-6-2.4-6-5.6 0-3.4 2.6-5 3.4-8.4 1.9 1.4 2.6 3.2 2.6 4.6.9-.7 1.6-2 1.6-3.4 2.5 2 4.4 4.3 4.4 7.2 0 3.2-2.4 5.6-6 5.6z" fill="currentColor" stroke="none"/>',
+    talk: '<path d="M3.5 5h11v8H8l-4.5 3.5z"/><path d="M14.5 9h6v8.5L17 15h-6v-2"/>',
+    dots: '<g fill="currentColor" stroke="none"><circle cx="6" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="18" cy="12" r="2"/></g>',
+    sleep: '<path d="M4 9h6l-6 7h6M14 5h6l-6 7h6"/>',
+    plus: '<path d="M12 5v14M5 12h14"/>',
+    x: '<path d="M6 6l12 12M18 6L6 18"/>',
   };
   const icon = k => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON[k]}</svg>`;
   const NAV = [
@@ -198,7 +227,7 @@
   function wsItem(w, i) {
     if (!w) {
       const rec = bestOffer();
-      return `<div class="ws free"><div class="ws-ico">+</div><div class="grow"><b>Free workstream</b>
+      return `<div class="ws free"><div class="ws-ico">${icon('plus')}</div><div class="grow"><b>Free workstream</b>
         <div class="muted small">${rec ? `Suggested: ${esc(rec.name)} for ${esc(rec.client)} · ${fmtDur(rec.dur)}` : 'Nobody is free right now'}</div></div>
         ${rec ? `<button class="btn primary" data-act="start" data-offer="${rec.id}" data-coach="${rec.tut ? 'offer-tut' : 'offer-any'}">Start</button>` : ''}
         <button class="btn ghost" data-act="nav" data-view="projects">Browse</button></div>`;
@@ -211,7 +240,7 @@
         ${done ? `<div class="small good">Delivered${w.billed ? ` · ${money(w.billed)} billed` : ''}. Waiting for your sign-off.</div>` : `<div class="bar"><div class="fill" data-progress="${i}" style="width:${clamp((now() - w.start) / (w.end - w.start), 0, 1) * 100}%"></div></div><div class="muted small"><span data-wseta="${i}"></span><span data-billed="${i}"></span></div>`}
       </div>
       ${done ? `<button class="btn primary glow" data-act="signoff" data-slot="${i}" data-coach="signoff">Sign off</button>`
-        : E.unlocked('rush') ? `<button class="btn rush" data-act="rush" data-slot="${i}" ${S.shots < 1 ? 'disabled' : ''} title="Use an espresso shot: halves the time left">⚡ Rush</button>` : ''}
+        : E.unlocked('rush') ? `<button class="btn rush" data-act="rush" data-slot="${i}" ${S.shots < 1 ? 'disabled' : ''} title="Use an espresso shot: halves the time left">${icon('breaks')}Rush</button>` : ''}
     </div>`;
   }
   // Espresso shots: how many, and when the next one arrives.
@@ -220,11 +249,11 @@
     const n = Math.floor(S.shots + 1e-9);
     const cap = E.shotCap();
     const next = n < cap ? ` · next in ${fmtDur((1 - (S.shots % 1)) * D.BALANCE.shotMinutes * 60)}` : '';
-    return `<span class="shots" title="Espresso shots rush a project">☕ ${n} shot${n === 1 ? '' : 's'}<span class="muted">${next}</span></span>`;
+    return `<span class="shots" title="Espresso shots rush a project">${icon('breaks')}${n} shot${n === 1 ? '' : 's'}<span class="muted">${next}</span></span>`;
   }
   function boostHtml() {
     const left = (S.boost.until - now()) / 1000;
-    return left > 0 ? `<span class="chip boost">📈 Revenue +${Math.round((S.boost.mult - 1) * 100)}% · ${fmtDur(left)}</span>` : '';
+    return left > 0 ? `<span class="chip boost">${icon('investors')}Revenue +${Math.round((S.boost.mult - 1) * 100)}% · ${fmtDur(left)}</span>` : '';
   }
   const wsList = () => `<div class="ws-list">${Array.from({ length: E.wsCount() }, (_, i) => wsItem(S.ws[i], i)).join('')}</div>`;
   function tickerChip(big) {
@@ -244,8 +273,10 @@
     return '$' + (n / Math.pow(1000, tier)).toFixed(6) + SUFFIX[tier];
   }
   const rateText = r => (r > 0 ? `▲ ${r < 10 ? '$' + r.toFixed(2) : money(r)}/s` : 'No projects billing');
+  // The ring around the bolt fills as you tap and drains when you stop.
   const hustleBtn = cls => (E.unlocked('hustle') ? `<button class="hustle ${cls || ''}" data-act="hustle" aria-label="Hustle: tap or hold to make everyone work faster">
-    <span class="hs-clip"><span class="hs-fill"></span></span><span class="hs-ico" aria-hidden="true">🔥</span><b>Hustle</b><span class="hs-x">×1.0</span></button>` : '');
+    <span class="hs-gauge"><svg class="hs-ring" viewBox="0 0 40 40" aria-hidden="true"><circle class="hs-track" cx="20" cy="20" r="17"/><circle class="hs-prog" cx="20" cy="20" r="17" pathLength="100"/></svg>${icon('bolt')}</span>
+    <span class="hs-txt"><b>Hustle</b><span class="hs-sub">Tap or hold to speed everyone up</span></span><span class="hs-x">×1.0</span></button>` : '');
   // Revenue per five minutes over the last hour, oldest first; the last bucket is the one filling now.
   function trendBuckets() {
     const b = Math.floor(now() / 300e3);
@@ -267,8 +298,8 @@
   function hudCard() {
     const today = S.stats.dayRevenue[E.dayKey(now())] || 0;
     const auto = E.lvl('pmo')
-      ? `<span class="toggle ${S.settings.autopilot ? 'on' : ''}" data-act="setting" data-key="autopilot"><span class="sw"></span>🤖 Autopilot${S.settings.autopilot ? ': the team keeps working while you are away' : ' is off'}</span>`
-      : `<span class="muted small">🤖 Want it to run itself? A <a data-act="nav" data-view="office">Project office</a> adds autopilot${E.zoneOpen('meeting') ? '' : ' (opens at the Seed round)'}.</span>`;
+      ? `<span class="toggle ${S.settings.autopilot ? 'on' : ''}" data-act="setting" data-key="autopilot"><span class="sw"></span>Autopilot${S.settings.autopilot ? ': the team keeps working while you are away' : ' is off'}</span>`
+      : `<span class="muted small hud-auto">${icon('robot')}Want it to run itself? A <a data-act="nav" data-view="office">Project office</a> adds autopilot${E.zoneOpen('meeting') ? '' : ' (opens at the Seed round)'}.</span>`;
     return `<div class="card hud">
       <div class="hud-main"><div class="muted small">Budget</div><div class="hud-cash" data-cash>${cashText(S.cash)}</div>
         <div class="hud-sub small"><span class="hud-rate" data-rate>${rateText(E.rate())}</span><span>Today <b data-today>${money(today)}</b></span><span>Last hour <b data-hour>${money(E.lastHour())}</b></span></div></div>
@@ -280,42 +311,58 @@
   function floorModel() {
     const zones = {};
     for (const [z, info] of Object.entries(D.ZONES)) zones[z] = S.funding >= info.funding ? null : `Opens at ${D.FUNDING[info.funding].name}`;
-    return { lv: S.office, funding: S.funding, zones, desks: Math.min(A.DESK_COUNT, 4 + 2 * E.lvl('desks')) };
+    return { lv: S.office, zones, desks: Math.min(A.DESK_COUNT, 4 + 2 * E.lvl('desks')), building: S.builds.map(b => b.id) };
   }
   let floorCache = { key: '', svg: '' };
-  function floorHtml() {
+  // big: the Office page's view, which phones scroll sideways.
+  function floorHtml(big) {
     const m = floorModel();
     const key = JSON.stringify(m);
     if (key !== floorCache.key) floorCache = { key, svg: A.floor(m) };
-    return `<div class="floor" data-key="${hashStr(key)}"><div class="floor-bg">${floorCache.svg}</div><div class="floor-people" data-floor></div></div>`;
+    const labels = Object.entries(D.ZONES).map(([z, info]) => {
+      const p = A.zoneSpot(z), round = S.funding < info.funding ? D.FUNDING[info.funding].name : '';
+      return `<span class="fp-zone ${round ? 'locked' : ''}" style="left:${p.x}%;top:${p.y}%">${round ? icon('lock') : ''}<b>${esc(info.name)}</b>${round ? `<span title="Opens at ${esc(round)}">${esc(round)}</span>` : ''}</span>`;
+    }).join('');
+    return `<div class="floor-wrap ${big ? 'big' : ''}" data-key="${hashStr(key + big)}"><div class="floor" style="aspect-ratio:${A.FLOOR_W} / ${A.FLOOR_H}">
+      <div class="floor-bg">${floorCache.svg}</div><div class="floor-labels">${labels}</div><div class="floor-people" data-floor></div></div></div>`;
   }
   const hashStr = s => { let h = 0; for (const c of s) h = (h * 31 + c.charCodeAt(0)) >>> 0; return h; };
+  // Where someone is in the office, the icon over their head, and whether they are typing.
   function personSpot(id, idx, desks) {
     const t = now();
     const st = S.staff[id];
     const phase = (hashStr(id) + Math.floor(t / (7 * 60e3))) % 10;
     const pending = S.inbox.some(m => m.from === id && m.choices && !m.done);
     const desk = idx < desks ? A.spot('desk', idx) : null;
-    if (E.PEOPLE[id].noWork) return { p: A.spot(E.zoneOpen('lounge') && phase < 6 ? 'lounge' : 'coffee', idx), b: '🐾' };
-    if (E.resting(id)) return { p: A.spot(E.zoneOpen('lounge') ? 'lounge' : 'coffee', idx), b: '💤' };
+    if (E.PEOPLE[id].noWork) return { p: A.spot(E.zoneOpen('lounge') && phase < 6 ? 'lounge' : 'coffee', idx), b: 'paw' };
+    if (E.resting(id)) return { p: A.spot(E.zoneOpen('lounge') ? 'lounge' : 'coffee', idx), b: 'sleep' };
     const w = S.ws.find(x => x && x.team.includes(id));
     if (w) {
-      if (t >= w.end) return { p: desk || A.spot('coffee', idx), b: '✅' };
-      if (w.team.length > 1 && E.lvl('rooms') > 0 && phase < 3) return { p: A.spot('meeting', (S.ws.indexOf(w) % E.lvl('rooms')) * 4 + w.team.indexOf(id)), b: '🗣️' };
-      return { p: desk || A.spot('coffee', idx), b: pending ? '💬' : E.hustleLevel() > 0.05 ? '🔥' : '💻' };
+      if (t >= w.end) return { p: desk || A.spot('coffee', idx), b: 'check' };
+      if (w.team.length > 1 && E.lvl('rooms') > 0 && phase < 3) return { p: A.spot('meeting', (S.ws.indexOf(w) % E.lvl('rooms')) * 4 + w.team.indexOf(id)), b: 'talk' };
+      return { p: desk || A.spot('coffee', idx), b: pending ? 'dots' : E.hustleLevel() > 0.05 ? 'flame' : '', work: !!desk };
     }
-    if (pending) return { p: desk || A.spot('coffee', idx), b: '💬' };
-    if (!desk || phase < 3) return { p: A.spot('coffee', idx), b: '☕' };
-    return { p: desk, b: st.mood < 35 ? '☁️' : '' };
+    if (pending) return { p: desk || A.spot('coffee', idx), b: 'dots' };
+    if (!desk || phase < 3) return { p: A.spot('coffee', idx), b: 'breaks' };
+    return { p: desk, b: st.mood < 35 ? 'cloud' : '' };
   }
+  const todOf = h => (h >= 20 || h < 6 ? 'night' : h < 8 ? 'dawn' : h >= 17 ? 'dusk' : 'day');
   function updateFloors() {
     const roots = $$('[data-floor]');
     if (!roots.length) return;
     const desks = floorModel().desks;
     const ids = E.owned();
+    const hot = E.hustleLevel() > 0.05;
+    const d = new Date(), h = d.getHours(), mins = d.getMinutes();
     for (const root of roots) {
+      const fl = root.closest('.floor');
+      fl.dataset.tod = todOf(h);
+      const hh = fl.querySelector('.fp-hh'), mh = fl.querySelector('.fp-mh');
+      if (hh && mh) { hh.setAttribute('transform', `rotate(${(h % 12) * 30 + mins / 2} 176 24)`); mh.setAttribute('transform', `rotate(${mins * 6} 176 24)`); }
       for (const el of [...root.children]) if (!S.staff[el.dataset.id]) el.remove();
       ids.forEach((id, idx) => {
+        const { p, b, work } = personSpot(id, idx, desks);
+        const pos = p.x.toFixed(2) + ',' + p.y.toFixed(2);
         let el = root.querySelector(`[data-id="${id}"]`);
         if (!el) {
           el = document.createElement('button');
@@ -323,13 +370,26 @@
           el.dataset.act = 'profile';
           el.dataset.id = id;
           el.title = who(id).name;
-          el.innerHTML = `${av(id)}<span class="fp-bubble"></span>`;
+          el.innerHTML = `<span class="fp-fig">${av(id)}</span><span class="fp-bubble"></span>`;
           root.appendChild(el);
+        } else if (el.dataset.pos !== pos) {
+          // Walk over: the move is a CSS transition, with a little hop while it lasts.
+          el.classList.add('walk');
+          clearTimeout(el.walkTimer);
+          el.walkTimer = setTimeout(() => el.classList.remove('walk'), 1600);
         }
-        const { p, b } = personSpot(id, idx, desks);
+        el.dataset.pos = pos;
         el.style.left = p.x + '%';
         el.style.top = p.y + '%';
-        el.querySelector('.fp-bubble').textContent = b;
+        el.style.zIndex = Math.round(p.y * 10);
+        el.classList.toggle('work', !!work);
+        el.classList.toggle('hot', !!work && hot);
+        if (el.dataset.b !== b) {
+          el.dataset.b = b;
+          const bub = el.querySelector('.fp-bubble');
+          bub.className = 'fp-bubble b-' + b;
+          bub.innerHTML = b ? icon(b) : '';
+        }
       });
     }
   }
@@ -337,9 +397,9 @@
   function commitChip() {
     if (!E.unlocked('commit') || !S.commit) return '';
     const c = S.commit;
-    if (c.tier === null) return `<button class="commit" data-act="nav" data-view="inbox">🎯 <b>Set today's ${c.ipo ? 'guidance' : 'commitment'}</b></button>`;
+    if (c.tier === null) return `<button class="commit" data-act="nav" data-view="inbox">${icon('target')}<b>Set today's ${c.ipo ? 'guidance' : 'commitment'}</b></button>`;
     const pips = Array.from({ length: Math.min(c.target, 24) }, (_, i) => `<i class="${i < c.progress ? 'on' : ''}"></i>`).join('');
-    return `<div class="commit ${c.paid ? 'done' : ''}">🎯 <b>${esc(E.commitName(c.tier))}</b><span class="pips">${pips}</span><span>${Math.min(c.progress, c.target)}/${c.target}${c.paid ? ' ✓' : ''}</span></div>`;
+    return `<div class="commit ${c.paid ? 'done' : ''}">${icon('target')}<b>${esc(E.commitName(c.tier))}</b><span class="pips">${pips}</span><span>${Math.min(c.progress, c.target)}/${c.target}${c.paid ? ' ✓' : ''}</span></div>`;
   }
 
   // ================================================================ views
@@ -350,7 +410,7 @@
     const h = new Date().getHours();
     return `Good ${h < 12 ? 'morning' : h < 18 ? 'afternoon' : 'evening'}${S.name ? ', ' + esc(S.name) : ''}`;
   }
-  const NEXT_ICON = { signoff: '✅', inbox: '💬', quickstart: '▶️', projects: '📁', office: '🏢', hiring: '🎁', home: '⏳', breaks: '☕', investors: '📈' };
+  const NEXT_ICON = { signoff: 'check', inbox: 'inbox', quickstart: 'play', projects: 'projects', office: 'office', hiring: 'gift', home: 'hourglass', breaks: 'breaks', investors: 'investors' };
   function nextCard() {
     const step = E.nextStep();
     let btn = '';
@@ -362,13 +422,13 @@
     else if (step.action === 'hiring') btn = '<button class="btn primary" data-act="nav" data-view="hiring" data-coach="next">Open Hiring</button>';
     else if (step.action === 'breaks') btn = '<button class="btn primary" data-act="nav" data-view="breaks" data-coach="next">Take a break</button>';
     else if (step.action === 'investors') btn = '<button class="btn primary" data-act="nav" data-view="investors" data-coach="next">Open Investors</button>';
-    else if (step.wait && step.slot >= 0 && E.unlocked('rush') && S.shots >= 1) btn = `<button class="btn rush" data-act="rush" data-slot="${step.slot}" data-coach="next">⚡ Rush it</button>`;
-    return `<div class="card next"><div class="next-ico">${NEXT_ICON[step.action] || '•'}</div><div class="grow"><div class="muted small">Next step</div><b>${esc(step.text)}</b>
+    else if (step.wait && step.slot >= 0 && E.unlocked('rush') && S.shots >= 1) btn = `<button class="btn rush" data-act="rush" data-slot="${step.slot}" data-coach="next">${icon('breaks')}Rush it</button>`;
+    return `<div class="card next"><div class="next-ico">${icon(NEXT_ICON[step.action] || 'play')}</div><div class="grow"><div class="muted small">Next step</div><b>${esc(step.text)}</b>
       ${step.at ? `<div class="muted small" data-eta="${step.at}"></div>` : ''}</div>${btn}</div>`;
   }
   function installCard() {
     if (!compact() || isStandalone() || S.settings.installHint === false || S.tut !== -1) return '';
-    return `<div class="card next install"><div class="next-ico">📲</div><div class="grow"><b>Install Workforce on this phone</b><div class="muted small">Full-screen from your home screen, works offline.</div></div>
+    return `<div class="card next install"><div class="next-ico">${icon('install')}</div><div class="grow"><b>Install Workforce on this phone</b><div class="muted small">Full-screen from your home screen, works offline.</div></div>
       <button class="btn primary" data-act="install">Install</button><button class="btn" data-act="dismissInstall">Not now</button></div>`;
   }
   function inboxPreview() {
@@ -384,11 +444,11 @@
     const items = Object.entries(D.GAMES).map(([k, g]) => {
       const on = ready.includes(k);
       const sub = on ? 'Ready' : k === 'word' ? 'Done for today' : `in ${fmtDur((E.gameReadyAt(k) - now()) / 1000)}`;
-      return `<button class="break-btn ${on ? 'on' : ''}" data-act="game" data-g="${k}"><span class="bi">${GAME_ICON[k]}</span><span><b>${esc(g.name)}</b><span class="muted small">${sub}</span></span></button>`;
+      return `<button class="break-btn ${on ? 'on' : ''}" data-act="game" data-g="${k}"><span class="bi">${icon(GAME_ICON[k])}</span><span><b>${esc(g.name)}</b><span class="muted small">${sub}</span></span></button>`;
     }).join('');
     return `<div class="card"><div class="card-title">Breaks <span class="muted small">· quick games that pay out boosts</span><span class="spacer"></span>${boostHtml()}</div><div class="break-row">${items}</div></div>`;
   }
-  const GAME_ICON = { word: '🔤', inbox: '📥', stack: '🏢' };
+  const GAME_ICON = { word: 'tiles', inbox: 'tray', stack: 'tower' };
 
   VIEWS.home = () => `
     <div class="page-head"><div><div class="muted small">${greeting()}</div><h1>Home</h1></div>${tickerChip()}${commitChip()}</div>
@@ -396,7 +456,7 @@
     ${nextCard()}
     ${installCard()}
     <div class="home-grid">
-      <div class="card home-floor"><div class="card-title">Floor plan <span class="muted small">· ${D.FUNDING[S.funding].name}</span><span class="spacer"></span><button class="btn sm ghost" data-act="nav" data-view="office">Office</button></div>${floorHtml()}</div>
+      <div class="card home-floor"><div class="card-title">Atlas HQ <span class="muted small">· ${D.FUNDING[S.funding].name}</span><span class="spacer"></span><button class="btn sm ghost" data-act="nav" data-view="office">Upgrade</button></div>${floorHtml()}</div>
       <div class="home-side">
         <div class="card"><div class="card-title">Projects in flight<span class="spacer"></span>${shotsHtml()}<button class="btn sm ghost" data-act="nav" data-view="projects">All offers</button></div>${wsList()}</div>
         ${breaksCard()}
@@ -413,7 +473,7 @@
     return `<div class="offer ${o.vip ? 'vip' : ''} ${o.tut ? 'tut' : ''}">
       <div class="offer-top"><span class="logo">${A.logo(o.client)}</span><div class="grow"><b>${esc(o.name)}</b><div class="muted small">${esc(o.client)}</div></div>
         ${o.vip ? '<span class="chip vip">VIP · pays 1.5×</span>' : o.stretch ? '<span class="chip stretch">Stretch</span>' : ''}</div>
-      <div class="offer-facts"><span class="chip">⏱ ${fmtDur(o.dur)}</span><span class="chip">👥 ${D.SIZES[o.size].staff} · ${D.SIZES[o.size].name}</span>${o.needs.map(roleChip).join('')}</div>
+      <div class="offer-facts"><span class="chip">${icon('clock')}${fmtDur(o.dur)}</span><span class="chip">${icon('team')}${D.SIZES[o.size].staff} · ${D.SIZES[o.size].name}</span>${o.needs.map(roleChip).join('')}</div>
       ${team ? `<div class="forecast"><div class="fc-bar"><div style="width:${Math.round(f.p4 * 100)}%"></div></div><span>${Math.round(f.p4 * 100)}% chance of 4★+</span></div>
         <div class="offer-foot">${stack(team, 'sm')}<span class="est">≈ ${money(estimate(o, f))}</span>
           <button class="btn primary" data-act="start" data-offer="${o.id}" data-coach="${coach}" ${free ? '' : 'disabled'}>${free ? 'Start' : 'No free slot'}</button></div>`
@@ -473,7 +533,7 @@
     return `<button class="pcard ${p.r === 5 ? 'legend' : ''}" data-act="profile" data-id="${id}">${av(id, 'lg')}<div class="grow">
       <b>${esc(p.name)}</b><div class="muted small">${esc(jobTitle(id))}</div>
       <div class="pc-row">${band(p.r)}${st.stars ? starsHtml(st.stars) : ''}</div>
-      ${p.ability ? `<div class="pc-row ability-tag">⚡ ${esc(p.ability.name)}</div>` : ''}
+      ${p.ability ? `<div class="pc-row ability-tag">${icon('bolt')}${esc(p.ability.name)}</div>` : ''}
       <div class="pc-row"><span class="nowrap">Lvl ${st.lvl}</span><div class="bar thin"><div class="fill" style="width:${100 * st.xp / need}%"></div></div></div>
       <div class="pc-row">${A.moodFace(st.mood)}<span>${moodWord(st.mood)}</span>${heartsHtml(id)}</div>
       <div class="pc-row"><span class="status-tag ${s.cls}">${esc(s.text)}</span></div></div></button>`;
@@ -481,7 +541,7 @@
   VIEWS.team = () => {
     const ids = E.owned().sort((a, b) => E.skill(b) - E.skill(a));
     return `<div class="page-head"><div><div class="muted small">${ids.length} ${ids.length === 1 ? 'person' : 'people'} · tap someone to see their profile</div><h1>Team</h1></div>
-      ${E.unlocked('hiring') ? `<div class="actions"><button class="btn primary" data-act="nav" data-view="hiring">🎁 Hire${S.referrals >= 1 ? ` (${Math.floor(S.referrals)})` : ''}</button></div>` : ''}</div>
+      ${E.unlocked('hiring') ? `<div class="actions"><button class="btn primary" data-act="nav" data-view="hiring">Hire${S.referrals >= 1 ? ` (${Math.floor(S.referrals)})` : ''}</button></div>` : ''}</div>
       <div class="people">${ids.map(personCard).join('')}</div>
       <p class="muted small">People level up by delivering projects. Happy, rested people with matching skills earn better reviews. Coffee chats build bonds, and bonds unlock their stories. Open someone's profile to let them go.</p>`;
   };
@@ -506,7 +566,7 @@
       return `<div class="dir-p ${st ? '' : 'no'} ${p.r === 5 ? 'legend' : ''}"><span class="av lg">${A.avatar(p.look, { mono: !st })}</span><b>${st || gone ? esc(p.name) : '???'}</b>${band(p.r)}<span class="muted">${st ? (st.stars ? starsHtml(st.stars) : 'Lvl ' + st.lvl) : gone ? 'Alumni' : esc(D.ROLES[p.role].name)}</span></div>`;
     }).join('');
     return `<div class="page-head"><div><div class="muted small">${refs} referral${refs === 1 ? '' : 's'}${S.tickets ? ` · ${S.tickets} Headhunter ticket${S.tickets > 1 ? 's' : ''}` : ''} · you only find out who you hired when you open the box</div><h1>Hiring</h1></div></div>
-      <div class="card featured"><span class="av xl">${A.avatar(fp.look)}</span><div class="grow"><div class="muted small">Featured Legend · until ${new Date(ws).toLocaleDateString(undefined, { weekday: 'long' })}</div>
+      <div class="card featured"><div class="feat-art">${A.splash(fp.look, 5)}</div><div class="grow"><div class="muted small">Featured Legend · until ${new Date(ws).toLocaleDateString(undefined, { weekday: 'long' })}</div>
         <b class="fname">${esc(fp.name)}</b> <span class="muted small">${esc(fp.title)}</span>${band(5)}${abilityHtml(fp)}
         <div class="muted small">Half of all Legend hires this week are ${esc(fp.name.split(' ')[0])}.${S.staff[fid] ? ' Already on your team: another copy is a promotion.' : ''}</div></div></div>
       <div class="packs">${pack('single')}${pack('fair')}${S.tickets ? pack('legend') : ''}</div>
@@ -529,7 +589,7 @@
       if (k === 'word') status = ws.done ? (ws.won ? `Solved in ${ws.guesses.length} ✓${S.games.wordStreak > 1 ? ` · ${S.games.wordStreak}-day streak` : ''}` : 'Not today. New word tomorrow.') : `${6 - ws.guesses.length} tries left`;
       else status = (on ? 'Reward ready' : `Next reward in ${fmtDur((E.gameReadyAt(k) - now()) / 1000)} · play for fun meanwhile`) + (S.games.best[k] ? ` · best ${S.games.best[k]}` : '');
       const btn = k === 'word' && ws.done ? 'See result' : on ? 'Play' : 'Practise';
-      return `<div class="card game-card ${on ? 'on' : ''}"><div class="game-ico">${GAME_ICON[k]}</div><div class="grow"><b>${esc(g.name)}</b><div class="small">${esc(g.desc)}</div>
+      return `<div class="card game-card ${on ? 'on' : ''}"><div class="game-ico">${icon(GAME_ICON[k])}</div><div class="grow"><b>${esc(g.name)}</b><div class="small">${esc(g.desc)}</div>
         <div class="muted small">Reward: ${esc(g.reward)} · ${esc(status)}</div></div><button class="btn ${on ? 'primary' : ''}" data-act="game" data-g="${k}" data-coach="game-${k}">${btn}</button></div>`;
     };
     return `<div class="page-head"><div><div class="muted small">Wellbeing · quick brain breaks that pay out boosts</div><h1>Breaks</h1></div>${shotsHtml()}${boostHtml()}</div>
@@ -589,7 +649,7 @@
   VIEWS.office = () => {
     const builds = S.builds.map(b => {
       const o = E.OFFICE[b.id];
-      return `<div class="ws"><div class="ws-ico">🏗️</div><div class="grow"><b>${esc(o.name)}</b> → level ${E.lvl(b.id) + 1}
+      return `<div class="ws"><div class="ws-ico">${icon('crane')}</div><div class="grow"><b>${esc(o.name)}</b> → level ${E.lvl(b.id) + 1}
         <div class="bar"><div class="fill" data-bprog="${b.id}" style="width:${clamp((now() - b.start) / (b.end - b.start), 0, 1) * 100}%"></div></div><div class="muted small" data-beta="${b.id}"></div></div></div>`;
     }).join('');
     const zones = Object.entries(D.ZONES);
@@ -606,11 +666,11 @@
           ${dots}<div class="small">${esc(lname)}${l ? ` · ${esc(o.fx(l))}` : ''}</div>
           ${maxed ? '<div class="small good">✓ Fully upgraded</div>' : `<div class="muted small">Next: ${esc(o.fx(l + 1))}</div>
           <div class="row" style="margin:0"><button class="btn ${block ? '' : 'primary'}" data-act="build" data-id="${o.id}" ${block ? 'disabled' : ''} data-coach="build-${o.id}">${zoneLocked ? esc(block) : `Build · ${money(E.buildCost(o.id))}`}</button>
-            <span class="muted small">${zoneLocked ? '' : block && block !== 'Not enough budget' ? esc(block) : '⏱ ' + fmtDur(E.buildTime(o.id))}</span></div>`}</div>`;
+            <span class="muted small">${zoneLocked ? '' : block && block !== 'Not enough budget' ? esc(block) : icon('clock') + fmtDur(E.buildTime(o.id))}</span></div>`}</div>`;
       }).join('');
     }).join('');
     return `<div class="page-head"><div><div class="muted small">${money(S.cash)} budget · ${E.crews()} build crew${E.crews() > 1 ? 's' : ''}</div><h1>Office</h1></div></div>
-      <div class="card">${floorHtml()}</div>
+      <div class="card office-hero"><div class="card-title">Atlas HQ <span class="muted small">· ${D.FUNDING[S.funding].name} · ${E.owned().length} ${E.owned().length === 1 ? 'person' : 'people'}</span></div>${floorHtml(true)}<div class="muted small swipe-hint">Swipe sideways to look around the office.</div></div>
       ${builds ? `<div class="card"><div class="card-title">Under construction<span class="spacer"></span>${hustleBtn()}</div><div class="builds">${builds}</div></div>` : ''}
       <div class="upgrades">${upg}</div>`;
   };
@@ -621,7 +681,7 @@
     const daysLeft = (S.league.end - now()) / 86400e3;
     const n = rows.length;
     return `<div class="page-head"><div><div class="muted small">Ends in ${daysLeft >= 1 ? Math.floor(daysLeft) + 'd ' : ''}${fmtDur(((S.league.end - now()) % 86400e3) / 1000)}</div><h1>League</h1></div></div>
-      <div class="card"><div class="league-head"><div class="league-badge">🏆</div><div><div class="muted small">This week</div><b style="font-size:18px">${D.LEAGUES[S.leagueTier]} league</b>
+      <div class="card"><div class="league-head"><div class="league-badge">${icon('league')}</div><div><div class="muted small">This week</div><b style="font-size:18px">${D.LEAGUES[S.leagueTier]} league</b>
         <div class="muted small">Earn client stars to climb. Top 2 move up, last place moves down.</div></div></div></div>
       <div class="card"><div class="table-wrap"><table class="table rank"><thead><tr><th>#</th><th>Manager</th><th class="num">Stars</th><th>Team</th></tr></thead><tbody>
         ${rows.map((r, i) => `<tr class="${r.you ? 'me' : ''} ${i < 2 && S.leagueTier < D.LEAGUES.length - 1 ? 'up' : ''} ${i === n - 1 && S.leagueTier > 0 ? 'down' : ''}">
@@ -699,10 +759,13 @@
       if (view === 'settings' || chartActive) return false;
     }
     const y = window.scrollY;
-    const oldFloor = root.querySelector('.floor');
+    const oldFloor = root.querySelector('.floor-wrap');
+    const oldScroll = oldFloor ? oldFloor.scrollLeft : 0;
     root.innerHTML = VIEWS[view]();
-    const newFloor = root.querySelector('.floor');
-    if (oldFloor && newFloor && oldFloor.dataset.key === newFloor.dataset.key) newFloor.replaceWith(oldFloor);
+    const newFloor = root.querySelector('.floor-wrap');
+    // Moving the element back resets its scroll, so that is put back too. Phones start on the open plan.
+    if (oldFloor && newFloor && oldFloor.dataset.key === newFloor.dataset.key) { newFloor.replaceWith(oldFloor); oldFloor.scrollLeft = oldScroll; }
+    else if (newFloor) newFloor.scrollLeft = oldScroll || (newFloor.scrollWidth - newFloor.clientWidth) / 2;
     if (!force) window.scrollTo(0, y);
     updateFloors();
     live();
@@ -739,8 +802,8 @@
       el.classList.toggle('xlong', cash.length > 16);
     }
     const lvl = E.hustleLevel(t);
-    for (const b of $$('.hustle')) {
-      b.style.setProperty('--h', lvl);
+    for (const b of $$('button.hustle')) {
+      b.querySelector('.hs-prog').style.strokeDashoffset = 100 - 100 * lvl;
       b.querySelector('.hs-x').textContent = '×' + (1 + (D.BALANCE.hustleMax - 1) * lvl).toFixed(1);
       b.classList.toggle('hot', lvl > 0.95);
     }
@@ -754,18 +817,22 @@
     for (const el of $$('[data-billed]')) { const w = S.ws[+el.dataset.billed]; el.textContent = w && w.billed ? ` · ${money(w.billed)} billed` : ''; }
     for (const el of $$('[data-beta]')) el.textContent = toGo(S.builds.find(x => x.id === el.dataset.beta));
   }
-  // Hustle: a tap gives one push and holding keeps pushing. Sparks fly unless stealth mode is on.
+  // Hustle: a tap gives one push and holding keeps pushing. Sparks fly off the gauge unless stealth mode is on.
   function hustleTap(btn) {
     if (!E.hustle() || S.settings.stealth || !btn) return;
     btn.classList.remove('tap');
     void btn.offsetWidth;
     btn.classList.add('tap');
-    const sp = document.createElement('span');
-    sp.className = 'spark';
-    sp.textContent = pick(['🔥', '⚡', '💨', '💪']);
-    sp.style.left = 15 + Math.random() * 70 + '%';
-    btn.appendChild(sp);
-    setTimeout(() => sp.remove(), 700);
+    const g = btn.querySelector('.hs-gauge');
+    for (let i = 0; i < 3; i++) {
+      const sp = document.createElement('i');
+      const a = Math.random() * Math.PI * 2, r = 16 + Math.random() * 20;
+      sp.className = 'spark';
+      sp.style.setProperty('--dx', (Math.cos(a) * r).toFixed(1) + 'px');
+      sp.style.setProperty('--dy', (Math.sin(a) * r).toFixed(1) + 'px');
+      g.appendChild(sp);
+      setTimeout(() => sp.remove(), 600);
+    }
   }
   // Hover and focus readout for the revenue trend bars.
   function trendTip(tb, show) {
@@ -792,8 +859,8 @@
     if (!ringing) {
       if (!$('#overlay').classList.contains('hidden') || !$('#decoy').classList.contains('hidden') || document.hidden) return;
       ringing = now();
-      el.innerHTML = `<span class="call-ico" aria-hidden="true">📞</span><div class="grow"><b>${esc(c.from)}</b><div class="muted small">Incoming call</div><div class="call-bar"><i></i></div></div>
-        <button class="btn" data-act="declineCall" aria-label="Decline">✕</button><button class="btn primary" data-act="answerCall">Answer</button>`;
+      el.innerHTML = `<span class="call-ico" aria-hidden="true">${icon('phone')}</span><div class="grow"><b>${esc(c.from)}</b><div class="muted small">Incoming call</div><div class="call-bar"><i></i></div></div>
+        <button class="btn only" data-act="declineCall" aria-label="Decline">${icon('x')}</button><button class="btn primary" data-act="answerCall">Answer</button>`;
       el.classList.remove('hidden');
       buzz([40, 80, 40]);
     } else if (now() - ringing > RING_MS) {
@@ -863,17 +930,17 @@
     if (r.career) {
       let title = '';
       for (const [l, t] of D.CAREER_TITLES) if (r.career >= l) title = t;
-      out.push(`<div class="extra gold">🎖️<span><b>Career level ${r.career}</b> · ${esc(title)}</span></div>`);
+      out.push(`<div class="extra gold">${icon('medal')}<span><b>Career level ${r.career}</b> · ${esc(title)}</span></div>`);
     }
-    if (r.commitDone) out.push('<div class="extra gold">🎯<span><b>Daily commitment hit!</b> Rewards are in your inbox.</span></div>');
+    if (r.commitDone) out.push(`<div class="extra gold">${icon('target')}<span><b>Daily commitment hit!</b> Rewards are in your inbox.</span></div>`);
     for (const it of r.items) {
       out.push(it.sold
         ? `<div class="extra">${A.gearIcon(it.slot, it.r)}<span>${esc(D.GEAR[it.slot].items[it.r])} sold to IT surplus</span></div>`
         : `<div class="extra">${A.gearIcon(it.slot, it.r)}<span><b>${esc(D.GEAR[it.slot].items[it.r])}</b> for ${esc(who(it.owner).first)} (+${it.pct}% skill)</span></div>`);
     }
-    if (r.instant) out.push(`<div class="extra gold">⚡<span><b>${esc(who(r.team.find(id => E.PEOPLE[id].ability && E.PEOPLE[id].ability.id === 'warp')).first)}</b> delivered it the moment it started</span></div>`);
-    if (r.refs) out.push('<div class="extra">🤝<span>The client referred someone. <b>+1 referral</b></span></div>');
-    if (r.passed && r.passed.length) out.push(`<div class="extra">🏆<span>You passed <b>${r.passed.map(id => esc(who('rival:' + id).first)).join(', ')}</b> in the league</span></div>`);
+    if (r.instant) out.push(`<div class="extra gold">${icon('bolt')}<span><b>${esc(who(r.team.find(id => E.PEOPLE[id].ability && E.PEOPLE[id].ability.id === 'warp')).first)}</b> delivered it the moment it started</span></div>`);
+    if (r.refs) out.push(`<div class="extra">${icon('hiring')}<span>The client referred someone. <b>+1 referral</b></span></div>`);
+    if (r.passed && r.passed.length) out.push(`<div class="extra">${icon('league')}<span>You passed <b>${r.passed.map(id => esc(who('rival:' + id).first)).join(', ')}</b> in the league</span></div>`);
     return out.join('');
   }
   function showReview(results, idx) {
@@ -948,7 +1015,7 @@
     const p = E.PEOPLE[x.id];
     const line = x.kind === 'new' ? `<span class="good"><b>${x.back ? 'Welcome back!' : 'New hire!'}</b></span>` : x.kind === 'star' ? `<span>Promoted to ${'★'.repeat(x.stars)}</span>` : `<span class="muted">Signing bonus ${money(x.cash)}</span>`;
     return `<button class="bbox r${x.r}" data-act="openBox" data-i="${i}" aria-label="Open box ${i + 1}"><span class="bbox-box">${A.box(kind)}</span>
-      <span class="bbox-card r${p.r}">${p.r === 5 ? '<span class="burst"></span><span class="legend-tag">LEGEND</span>' : ''}${av(x.id, 'lg')}<b>${esc(p.name)}</b>${band(p.r)}${line}${p.ability && x.kind === 'new' ? `<span class="ab">⚡ ${esc(p.ability.name)}</span>` : ''}</span></button>`;
+      <span class="bbox-card r${p.r}">${p.r === 5 ? '<span class="burst"></span><span class="legend-tag">LEGEND</span>' : ''}${av(x.id, 'lg')}<b>${esc(p.name)}</b>${band(p.r)}${line}${p.ability && x.kind === 'new' ? `<span class="ab">${icon('bolt')}${esc(p.ability.name)}</span>` : ''}</span></button>`;
   }
   function openBox(i, instant) {
     const b = boxes[i];
@@ -956,12 +1023,49 @@
     if (!b || b.opened || !el) return;
     b.opened = true;
     if (instant) { el.classList.add('open'); boxSummary(); return; }
-    el.classList.add('shake');
+    // Principal and Legend boxes charge up for longer, then open into a full-screen reveal.
+    const rare = b.r >= 4;
+    el.classList.add(rare ? 'charge' : 'shake');
     setTimeout(() => {
       el.classList.add('open');
-      if (b.r >= 3) buzz(b.r === 5 ? [30, 60, 30, 60, 90] : [20, 40, 20]);
+      if (b.r === 3) buzz([20, 40, 20]);
       boxSummary();
-    }, b.r >= 4 ? 900 : 450);
+      if (rare && document.body.contains(el)) rareSplash(b);
+    }, rare ? 1300 : b.r === 3 ? 700 : 450);
+  }
+
+  // --- the reveal for rare hires: splash art, name, ability. Several queue up behind each other.
+  const splashQueue = [];
+  let splashAt = 0;
+  function rareSplash(x) {
+    if (S.settings.stealth) return;
+    splashQueue.push(x);
+    if (splashQueue.length === 1) return showSplash();
+    const btn = $('#splash .sp-go');
+    if (btn) btn.textContent = `Next (${splashQueue.length - 1} more)`;
+  }
+  function showSplash() {
+    const x = splashQueue[0], el = $('#splash');
+    if (!x) { el.classList.add('hidden'); el.innerHTML = ''; return; }
+    const p = E.PEOPLE[x.id];
+    const line = x.kind === 'new' ? (x.back ? 'Welcome back' : 'New hire') : x.kind === 'star' ? `Promoted to ${'★'.repeat(x.stars)}` : `Signing bonus ${money(x.cash)}`;
+    const colors = p.r === 5 ? ['#ffe066', '#ff8787', '#da77f2', '#74c0fc', '#8ce99a'] : ['#ffd27a', '#ffb347', '#fff3c4'];
+    const bits = Array.from({ length: 28 }, (_, i) => {
+      const a = (i / 28) * Math.PI * 2 + Math.random() * 0.4, r = 120 + Math.random() * 200;
+      return `<i style="--dx:${(Math.cos(a) * r).toFixed(0)}px;--dy:${(Math.sin(a) * r).toFixed(0)}px;--d:${(Math.random() * 0.3).toFixed(2)}s;--c:${pick(colors)}"></i>`;
+    }).join('');
+    el.className = `splash r${p.r}`;
+    el.setAttribute('aria-label', `${D.RARITY[p.r].name}: ${p.name}`);
+    el.innerHTML = `<div class="sp-flash"></div><div class="sp-bits" aria-hidden="true">${bits}</div>
+      <div class="sp-stage"><div class="sp-card"><div class="sp-art">${A.splash(p.look, p.r)}</div>${p.r === 5 ? '<span class="sp-ribbon">Legend</span>' : ''}</div>
+        <div class="sp-info"><div class="sp-kicker">${esc(D.RARITY[p.r].name)} · ${esc(line)}</div><div class="sp-name">${esc(p.name)}</div><div class="sp-title">${esc(jobTitle(x.id))}</div>
+          ${p.ability ? `<div class="sp-ab">${icon('bolt')}<span><b>${esc(p.ability.name)}</b> ${esc(p.ability.desc)}</span></div>` : ''}
+          <div class="sp-quote">“${esc(p.catch)}”</div></div></div>
+      <button class="sp-go" data-act="splashNext">${splashQueue.length > 1 ? `Next (${splashQueue.length - 1} more)` : 'Continue'}</button>`;
+    el.classList.remove('hidden');
+    splashAt = now();
+    buzz(p.r === 5 ? [30, 60, 30, 60, 120] : [25, 50, 60]);
+    setTimeout(() => { const btn = el.querySelector('.sp-go'); if (btn) btn.focus({ preventScroll: true }); }, 50);
   }
   function boxSummary() {
     const el = $('#boxSum');
@@ -973,16 +1077,16 @@
 
   // --- IPO and market-cap milestones
   function showIPO(data) {
-    openDialog(`<div class="ipo"><div class="ipo-bell" id="bell">🔔</div><div class="muted small">Opening bell</div><h3>Atlas is a public company!</h3>
+    openDialog(`<div class="ipo"><div class="ipo-bell" id="bell">${icon('bell')}</div><div class="muted small">Opening bell</div><h3>Atlas is a public company!</h3>
       <div class="ticker big static"><b>ATLS</b> ${price(data.price)} <span class="gain">▲ 15.0%</span></div>
       <p>From today every day is a fiscal quarter. Your daily commitment becomes the guidance you give Wall Street: beat it and ATLS pops, miss it and it drops. Keep growing and the market cap climbs. Forever.</p>
-      <div class="extras"><div class="extra gold">🎁<span>A <b>Legend</b> wants to join: open the Headhunter box in Hiring</span></div><div class="extra">📈<span><b>Investors</b> is open: share price, milestones and companies to buy</span></div></div>
+      <div class="extras"><div class="extra gold">${icon('gift')}<span>A <b>Legend</b> wants to join: open the Headhunter box in Hiring</span></div><div class="extra">${icon('investors')}<span><b>Investors</b> is open: share price, milestones and companies to buy</span></div></div>
       <div class="actions"><button class="btn" data-act="ringBell">Ring the bell</button><button class="btn primary" data-act="nav" data-view="investors">See the stock</button></div></div>`, { cls: 'ipo-dialog', queue: true });
   }
   function showCap(data) {
-    openDialog(`<div class="profile-head">${av('ceo', 'xl')}<div><div class="muted small">Alex Rivera · CEO</div><h3>📈 ${esc(data.name || money(data.cap) + ' company')}!</h3></div></div>
+    openDialog(`<div class="profile-head">${av('ceo', 'xl')}<div><div class="muted small">Alex Rivera · CEO</div><h3>${esc(data.name || money(data.cap) + ' company')}!</h3></div></div>
       <p>ATLS just passed a <b>${money(data.cap)}</b> market cap.</p>
-      <div class="extras"><div class="extra gold">📈<span>Brand value: revenue <b>+5%</b> for good</span></div><div class="extra gold">🎁<span>A headhunter found another <b>Legend</b>. Open the box in Hiring.</span></div></div>
+      <div class="extras"><div class="extra gold">${icon('investors')}<span>Brand value: revenue <b>+5%</b> for good</span></div><div class="extra gold">${icon('gift')}<span>A headhunter found another <b>Legend</b>. Open the box in Hiring.</span></div></div>
       <div class="actions"><button class="btn primary" data-act="closeDialog">Ring it in</button></div>`, { queue: true });
   }
 
@@ -1047,8 +1151,8 @@
     const g = D.GAMES[kind];
     const best = S.games.best[kind] || 0;
     const reward = !res || res.cooldown ? '<div class="muted small">Practice round, no reward this time.</div>'
-      : kind === 'inbox' ? `<div class="extra gold">☕<span>${res.shots ? `<b>+${res.shots} espresso shot${res.shots > 1 ? 's' : ''}</b>` : `No shots this time: score ${g.tiers[0]} or more to earn one`}</span></div>`
-        : `<div class="extra gold">📈<span>Revenue <b>+50% for ${res.boost} minutes</b></span></div>`;
+      : kind === 'inbox' ? `<div class="extra gold">${icon('breaks')}<span>${res.shots ? `<b>+${res.shots} espresso shot${res.shots > 1 ? 's' : ''}</b>` : `No shots this time: score ${g.tiers[0]} or more to earn one`}</span></div>`
+        : `<div class="extra gold">${icon('investors')}<span>Revenue <b>+50% for ${res.boost} minutes</b></span></div>`;
     const next = g.tiers.find(x => score < x);
     return `<div class="game-end"><div class="big-num">${score}</div><div class="grow"><div class="small"><b>${esc(g.unit)}</b>${res && res.best ? ' · <b class="good">New best!</b>' : ` · best ${best}`}</div>
       ${lines ? `<div class="muted small">${lines}</div>` : ''}${reward}
@@ -1067,7 +1171,7 @@
     stopInbox();
     const g = D.GAMES.inbox;
     openDialog(`<button class="dlg-x" data-act="closeDialog" aria-label="Close">×</button><h3>Inbox Zero</h3>
-      <div class="muted small game-intro">Tap each notification before it expires. Unbroken streaks multiply your points. ⭐ is the CEO (triple points), ☕ adds two seconds, and 🎣 is phishing: leave it alone.${practiceNote('inbox')}</div>
+      <div class="muted small game-intro">Tap each notification before it expires. Unbroken streaks multiply your points. The CEO ${icon('star')} scores triple, coffee ${icon('breaks')} adds two seconds, and phishing ${icon('hook')} costs points: leave it alone.${practiceNote('inbox')}</div>
       <div class="iz-top"><div class="bar thin grow"><div class="fill" id="izBar" style="width:100%"></div></div><span>Score <b id="izScore">0</b></span><span class="iz-combo" id="izCombo"></span></div>
       <div class="iz-grid" id="izGrid">${Array.from({ length: 9 }, (_, i) => `<button class="iz-cell" data-act="iz" data-i="${i}" aria-label="Slot ${i + 1}"><span class="iz-key">${i + 1}</span></button>`).join('')}
         <div class="iz-start" id="izStart"><button class="btn primary big" data-act="izStart">Start</button><div class="muted small">Rewards at ${g.tiers.join(' / ')} points · keys 1–9 work too</div></div></div>
@@ -1106,7 +1210,7 @@
         const life = kind.life * (1 - 0.3 * k) * 1000;
         const el = document.createElement('span');
         el.className = `iz-item ${kind.phish ? 'phish' : ''} ${kind.pts > 1 ? 'vip' : ''} ${kind.bonus ? 'bonus' : ''}`;
-        el.innerHTML = `<span class="iz-ico">${kind.icon}</span><span class="iz-txt">${esc(pick(kind.lines))}</span><i class="iz-life" style="animation-duration:${life}ms"></i>`;
+        el.innerHTML = `<span class="iz-ico">${icon(kind.icon)}</span><span class="iz-txt">${esc(pick(kind.lines))}</span><i class="iz-life" style="animation-duration:${life}ms"></i>`;
         $(`.iz-cell[data-i="${i}"]`).appendChild(el);
         g.cells[i] = { kind, dies: t + life, el };
       }
@@ -1401,7 +1505,7 @@
     }).join('');
     const story = p.story.map((line, i) => {
       const need = [1, 3, 5][i];
-      return h >= need ? `<li>${esc(line)}</li>` : `<li class="locked">🔒 Unlocks at ${'♥'.repeat(need)}</li>`;
+      return h >= need ? `<li>${esc(line)}</li>` : `<li class="locked">${icon('lock')}Unlocks at ${'♥'.repeat(need)}</li>`;
     }).join('');
     const msg = S.inbox.find(m => m.from === id && m.choices && !m.done);
     openDialog(`<div class="profile-head">${av(id, 'xl')}<div class="grow"><h3>${esc(p.name)}</h3><div class="muted small">${esc(jobTitle(id))}</div>
@@ -1421,7 +1525,7 @@
       ${p.traits.length ? `<div class="traits">${p.traits.map(t => `<div class="trait"><b>${esc(D.TRAITS[t].name)}</b>${esc(D.TRAITS[t].desc)}</div>`).join('')}</div>` : ''}
       ${E.unlocked('gear') ? `<div class="card-title" style="margin:12px 0 0">Equipment</div><div class="gear-row">${gear}</div>` : ''}
       <div class="card-title" style="margin:12px 0 0">Their story</div><ul class="story">${story}</ul>
-      <div class="actions"><button class="btn ghost danger letgo" data-act="letgo" data-id="${id}">Let go…</button><button class="btn" data-act="closeDialog">Close</button><button class="btn primary" data-act="chat" data-id="${id}" ${chatReady ? '' : 'disabled'}>${chatReady ? '☕ Coffee chat' : `☕ Again in ${fmtDur((st.lastChat + 4 * 3600e3 - now()) / 1000)}`}</button></div>`);
+      <div class="actions"><button class="btn ghost danger letgo" data-act="letgo" data-id="${id}">Let go…</button><button class="btn" data-act="closeDialog">Close</button><button class="btn primary" data-act="chat" data-id="${id}" ${chatReady ? '' : 'disabled'}>${icon('breaks')}${chatReady ? 'Coffee chat' : `Again in ${fmtDur((st.lastChat + 4 * 3600e3 - now()) / 1000)}`}</button></div>`);
   }
 
   // ================================================================ coach marks (first session)
@@ -1477,21 +1581,21 @@
     while (pendingEvents.length) {
       const { type, data } = pendingEvents.shift();
       if (type === 'levelup' && !inReveal) toast(`${who(data.id).first} reached level ${data.lvl}`, data.id);
-      else if (type === 'career' && !inReveal) toast(`🎖️ Career level ${data.lvl}`);
+      else if (type === 'career' && !inReveal) toast(`Career level ${data.lvl}`);
       else if (type === 'unlock') toast(`New: ${data.title}`);
-      else if (type === 'built') toast(`🏗️ ${E.OFFICE[data.id].name} upgraded`);
-      else if (type === 'achievement') toast(`🏅 Badge: ${data.name}`);
+      else if (type === 'built') toast(`${E.OFFICE[data.id].name} upgraded`);
+      else if (type === 'achievement') toast(`Badge: ${data.name}`);
       else if (type === 'burnout') toast(`${who(data.id).first} is burnt out and taking a break`, data.id);
       else if (type === 'ipo') showIPO(data);
       else if (type === 'marketcap') {
         if (data.legend) showCap(data);
-        else toast(`📈 ATLS passed a ${money(data.cap)} market cap`);
+        else toast(`ATLS passed a ${money(data.cap)} market cap`);
       } else if (type === 'funding' && data.round < D.FUNDING.length - 1) {
         const r = D.FUNDING[data.round];
         const zones = Object.values(D.ZONES).filter(z => z.funding === data.round).map(z => z.name);
-        openDialog(`<div class="profile-head">${av('ceo', 'xl')}<div><div class="muted small">Alex Rivera · CEO</div><h3>🎉 ${esc(r.name)}!</h3></div></div>
-          <p>${esc(r.line)}</p><div class="extras"><div class="extra gold">💰<span><b>+${money(data.injection)}</b> funding injection</span></div>
-          <div class="extra gold">📈<span>Revenue <b>×1.5</b> for good</span></div>${zones.length ? `<div class="extra">🏢<span>New office space: <b>${esc(zones.join(', '))}</b></span></div>` : ''}</div>
+        openDialog(`<div class="profile-head">${av('ceo', 'xl')}<div><div class="muted small">Alex Rivera · CEO</div><h3>${esc(r.name)}!</h3></div></div>
+          <p>${esc(r.line)}</p><div class="extras"><div class="extra gold">${icon('coins')}<span><b>+${money(data.injection)}</b> funding injection</span></div>
+          <div class="extra gold">${icon('investors')}<span>Revenue <b>×1.5</b> for good</span></div>${zones.length ? `<div class="extra">${icon('office')}<span>New office space: <b>${esc(zones.join(', '))}</b></span></div>` : ''}</div>
           <div class="actions"><button class="btn primary" data-act="closeDialog">Let's go</button></div>`, { queue: true });
       } else if (type === 'message') {
         const m = data;
@@ -1594,9 +1698,9 @@
       ringing = 0;
       if (!r) { el.classList.add('hidden'); return; }
       save();
-      const what = { quote: `+${money(r.cash)}`, shot: '+1 espresso shot ☕', flow: 'Flow state: everyone works 3× faster for 20 seconds 🔥', boost: 'Revenue +50% for 10 minutes 📈', ref: '+1 referral 🎁' }[r.kind];
+      const what = { quote: `+${money(r.cash)}`, shot: '+1 espresso shot', flow: 'Flow state: everyone works 3× faster for 20 seconds', boost: 'Revenue +50% for 10 minutes', ref: '+1 referral' }[r.kind];
       el.dataset.state = 'done';
-      el.innerHTML = `<span class="call-ico" aria-hidden="true">📞</span><div class="grow"><b>${esc(r.from)}</b><div class="small">“${esc(r.text)}”</div><div class="call-win">${esc(what)}</div></div>`;
+      el.innerHTML = `<span class="call-ico" aria-hidden="true">${icon('phone')}</span><div class="grow"><b>${esc(r.from)}</b><div class="small">“${esc(r.text)}”</div><div class="call-win">${esc(what)}</div></div>`;
       buzz(15);
       setTimeout(() => { el.classList.add('hidden'); delete el.dataset.state; }, 3500);
       renderNav();
@@ -1610,7 +1714,7 @@
       const w = E.start(d.offer);
       if (!w) return toast('No free workstream or nobody available');
       save();
-      if (w.instant) toast(`⚡ ${who(w.team.find(id => E.PEOPLE[id].ability && E.PEOPLE[id].ability.id === 'warp')).first} delivered it the moment it started!`);
+      if (w.instant) toast(`${who(w.team.find(id => E.PEOPLE[id].ability && E.PEOPLE[id].ability.id === 'warp')).first} delivered it the moment it started!`);
       else toast(`${w.offer.name} started · ${fmtDur((w.end - w.start) / 1000)}`);
       renderNav();
       renderView(true);
@@ -1647,13 +1751,14 @@
       renderNav();
     },
     openBox: d => openBox(+d.i),
+    splashNext: () => { if (now() - splashAt < 700) return; splashQueue.shift(); showSplash(); }, // the delay stops a double tap skipping it
     openAll: () => boxes.forEach((b, i) => setTimeout(() => openBox(i), S.settings.stealth ? 0 : i * 170)),
     rush: d => {
       const r = E.rush(+d.slot);
       if (!r) return toast(S.shots < 1 ? `No espresso shots left. One arrives every ${D.BALANCE.shotMinutes} minutes.` : 'Nothing to rush');
       save();
       buzz(12);
-      toast(r.done ? '⚡ Rushed! Ready to sign off.' : '⚡ Rushed: half the time left');
+      toast(r.done ? 'Rushed! Ready to sign off.' : 'Rushed: half the time left');
       renderNav();
       renderView(true);
     },
@@ -1705,7 +1810,7 @@
         if (!r || r.error) return toast('Not enough budget');
         save();
         buzz([20, 40, 20]);
-        toast(`🤝 Atlas acquired ${r.name}`);
+        toast(`Atlas acquired ${r.name}`);
         renderNav();
         renderView(true);
       });
@@ -1713,7 +1818,7 @@
     build: d => {
       if (!E.build(d.id)) return;
       save();
-      toast(`🏗️ Building ${E.OFFICE[d.id].name} · ${fmtDur((S.builds[S.builds.length - 1].end - now()) / 1000)}`);
+      toast(`Building ${E.OFFICE[d.id].name} · ${fmtDur((S.builds[S.builds.length - 1].end - now()) / 1000)}`);
       renderView(true);
     },
     setting: d => { S.settings[d.key] = !S.settings[d.key]; applySettings(); save(); renderView(true); },
@@ -1735,8 +1840,9 @@
       S = E.fresh();
       save();
       go('home');
-      askName();
+      showIntro();
     }),
+    intro: d => showIntro(+d.i),
     saveName: () => {
       const v = ($('#nameInput').value || '').trim().slice(0, 20);
       S.name = v;
@@ -1748,12 +1854,27 @@
 
   const myLook = () => ({ skin: 2, hair: 'short', hc: '#3a2b20', top: '#005f73', topStyle: 'collar', bg: '#e3f1f4', mouth: 'smile' });
 
-  function askName() {
-    openDialog(`<div class="profile-head">${av('dana', 'xl')}<div><div class="muted small">Dana Okafor · VP Delivery</div><h3>Welcome to Atlas!</h3></div></div>
-      <p>I'm Dana, your manager. You're taking over a small team. They do the work; you make the calls. It runs in real time, so check in whenever suits you.</p>
-      <label class="field" style="max-width:none">What should the team call you?<input id="nameInput" maxlength="20" placeholder="Your first name" autocomplete="off"></label>
-      <div class="actions"><button class="btn primary" data-act="saveName">Let's go</button></div>`);
-    setTimeout(() => { const i = $('#nameInput'); if (i && !compact()) i.focus(); }, 50);
+  // First launch: four short slides with the basics, then your name. The rest is left to find.
+  const INTRO = [
+    { title: 'Welcome to Atlas', text: "I'm Dana, your manager. You're taking over a small team. They do the work. You make the calls.",
+      art: () => `<div class="in-team">${av('tyler', 'lg')}${av('dana', 'xl')}${av('kai', 'lg')}</div>` },
+    { title: 'Win work, get reviews', text: 'Start projects for clients. They run in real time, even with this tab closed. Sign each one off to read the client review: more stars, more revenue.',
+      art: () => `<div class="in-proj"><span class="logo">${A.logo('Contoso')}</span><div class="grow"><b>Website copy refresh</b><div class="muted small">Contoso · Quick win</div><div class="bar"><div class="fill"></div></div></div></div>
+        <div class="in-stars">${[1, 2, 3, 4, 5].map(i => `<svg class="rstar" style="animation-delay:${1 + i * 0.15}s" viewBox="0 0 24 24">${STAR_SVG}</svg>`).join('')}<b class="in-pay">+$24</b></div>` },
+    { title: 'Grow the company', text: 'Spend the budget on a better office. Hire from blind boxes: you only see who you got when you open one. Grow from a garage startup all the way to an IPO.',
+      art: () => `<div class="in-office">${A.floor({ id: 'in', lv: { coffee: 3, plants: 3, desks: 2, rooms: 2, pmo: 1, lounge: 2, phones: 3 }, zones: { library: 'x', servers: 'x', games: 'x', lobby: 'x' }, desks: 8, building: [] })}</div>` },
+    { title: 'Play it your way', text: 'Check in for a minute or leave it running all day. Hold Hustle to speed everyone up. And if someone walks past, press Esc (or tap ⧉) for a very boring report.',
+      art: () => `<div class="in-play"><span class="hustle big in-hustle" aria-hidden="true"><span class="hs-gauge"><svg class="hs-ring" viewBox="0 0 40 40"><circle class="hs-track" cx="20" cy="20" r="17"/><circle class="hs-prog" cx="20" cy="20" r="17" pathLength="100" style="stroke-dashoffset:35"/></svg>${icon('bolt')}</span><span class="hs-txt"><b>Hustle</b></span><span class="hs-x">×2.3</span></span>
+        <span class="in-key"><kbd>Esc</kbd>${icon('report')}<span class="muted small">Report view</span></span></div>` },
+  ];
+  function showIntro(i = 0) {
+    const s = INTRO[i], last = i === INTRO.length - 1;
+    openDialog(`<div class="in-art">${s.art()}</div><div class="in-step muted small">${i + 1} of ${INTRO.length}</div><h3>${esc(s.title)}</h3><p>${esc(s.text)}</p>
+      ${last ? '<label class="field" style="max-width:none">What should the team call you?<input id="nameInput" maxlength="20" placeholder="Your first name" autocomplete="off"></label><p class="muted small">Everything else, and there is a lot more, opens up as you go.</p>' : ''}
+      <div class="in-foot"><div class="in-dots">${INTRO.map((_, k) => `<i class="${k === i ? 'on' : ''}"></i>`).join('')}</div>
+        <div class="actions">${i ? `<button class="btn" data-act="intro" data-i="${i - 1}">Back</button>` : `<button class="btn ghost" data-act="intro" data-i="${INTRO.length - 1}">Skip</button>`}
+          ${last ? '<button class="btn primary" data-act="saveName">Let\'s go</button>' : `<button class="btn primary" data-act="intro" data-i="${i + 1}">Next</button>`}</div></div>`, { cls: 'intro-dialog' });
+    if (last) setTimeout(() => { const el = $('#nameInput'); if (el && !compact()) el.focus(); }, 50);
   }
 
   function applySettings() { document.body.classList.toggle('stealth', !!S.settings.stealth); }
@@ -1777,7 +1898,7 @@
     document.addEventListener('input', e => {
       if (e.target.id === 'setName') { S.name = e.target.value.trim().slice(0, 20); save(); }
     });
-    $('#overlay').addEventListener('click', e => { if (e.target.id === 'overlay' && !reveal) closeDialog(); });
+    $('#overlay').addEventListener('click', e => { if (e.target.id === 'overlay' && !reveal && !$('#dialog').classList.contains('intro-dialog')) closeDialog(); });
     $('#sheet').addEventListener('click', e => { if (e.target.id === 'sheet') closeSheet(); });
     $('#decoy').addEventListener('dblclick', toggleDecoy);
     const onResize = () => renderView(true);
@@ -1838,6 +1959,7 @@
         chartHover(plot, 0, (+plot.dataset.i || 0) + (e.key === 'ArrowLeft' ? -1 : 1));
         return;
       }
+      if (e.key === 'Escape' && !$('#splash').classList.contains('hidden')) { ACTIONS.splashNext(); return; } // ` still opens the report view
       if (e.key === 'Escape' && !$('#sheet').classList.contains('hidden')) { closeSheet(); return; }
       if (e.key === 'Escape' && open) { closeDialog(); return; }
       if ((e.key === 'Escape' || e.key === '`') && !/INPUT|TEXTAREA/.test(document.activeElement.tagName)) { e.preventDefault(); toggleDecoy(); return; }
@@ -1858,7 +1980,7 @@
     drainEvents();
     const readyNow = E.ready().join(',');
     if (readyNow !== lastReadyToast) {
-      if (readyNow.length > lastReadyToast.length && document.visibilityState === 'visible' && view !== 'home' && view !== 'projects') toast('✅ A project is ready for sign-off');
+      if (readyNow.length > lastReadyToast.length && document.visibilityState === 'visible' && view !== 'home' && view !== 'projects') toast('A project is ready for sign-off');
       lastReadyToast = readyNow;
     }
     if (readyNow !== lastReady) {
@@ -1903,7 +2025,7 @@
     requestAnimationFrame(frame);
 
     if (transfer) importCode(transfer).catch(() => toast('That transfer link looks incomplete. Try copying it again.'));
-    else if (fresh || S.tut === 0 && !S.name) askName();
+    else if (fresh || S.tut === 0 && !S.name) showIntro();
     else if (away > 10 * 60) {
       const ready = E.ready().length;
       const newMsgs = S.inbox.length - before.inbox;
@@ -1912,19 +2034,19 @@
       S.autoSummary = null;
       const lines = [];
       const earned = S.lifetime - before.lifetime;
-      if (earned > 0) lines.push(`💰 <b>+${money(earned)}</b> revenue while you were away`);
-      if (auto) lines.push(`🤖 Autopilot delivered <b>${auto.count}</b> project${auto.count > 1 ? 's' : ''} (avg ${(auto.stars / auto.count).toFixed(1)}★)`);
-      if (ready) lines.push(`✅ <b>${ready}</b> deliver${ready > 1 ? 'ies' : 'y'} waiting for your sign-off`);
-      if (newMsgs > 0) lines.push(`💬 <b>${newMsgs}</b> new message${newMsgs > 1 ? 's' : ''}`);
-      if (built) lines.push('🏗️ Office construction finished');
+      if (earned > 0) lines.push(['coins', `<b>+${money(earned)}</b> revenue while you were away`]);
+      if (auto) lines.push(['robot', `Autopilot delivered <b>${auto.count}</b> project${auto.count > 1 ? 's' : ''} (avg ${(auto.stars / auto.count).toFixed(1)}★)`]);
+      if (ready) lines.push(['check', `<b>${ready}</b> deliver${ready > 1 ? 'ies' : 'y'} waiting for your sign-off`]);
+      if (newMsgs > 0) lines.push(['inbox', `<b>${newMsgs}</b> new message${newMsgs > 1 ? 's' : ''}`]);
+      if (built) lines.push(['crane', 'Office construction finished']);
       if (S.stock && before.price) {
         const ch = (S.stock.price * Math.pow(10, S.stock.splits - before.splits)) / before.price - 1;
-        lines.push(`📈 ATLS ${pct(ch)} while you were away (now ${price(S.stock.price)})`);
+        lines.push(['investors', `ATLS ${pct(ch)} while you were away (now ${price(S.stock.price)})`]);
       }
-      if (S.tickets) lines.push(`🎁 A Legend is waiting in Hiring`);
+      if (S.tickets) lines.push(['gift', 'A Legend is waiting in Hiring']);
       if (lines.length) {
         openDialog(`<h3>Welcome back${S.name ? ', ' + esc(S.name) : ''}!</h3><p class="muted small">You were away ${fmtDur(away)}.</p>
-          <div class="extras">${lines.map(l => `<div class="extra"><span>${l}</span></div>`).join('')}</div>
+          <div class="extras">${lines.map(([k, l]) => `<div class="extra">${icon(k)}<span>${l}</span></div>`).join('')}</div>
           <div class="actions">${ready ? '<button class="btn" data-act="closeDialog">Later</button><button class="btn primary" data-act="signoffAll">Sign off now</button>' : '<button class="btn primary" data-act="closeDialog">Okay</button>'}</div>`);
       }
     }

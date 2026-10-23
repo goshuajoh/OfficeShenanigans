@@ -488,7 +488,7 @@ window.WF_DATA = (() => {
     { name: 'Series A', at: 1e5, line: 'Series A is done! We leased the rest of the floor: lounge, phone booths and a proper project office.' },
     { name: 'Series B', at: 1e7, line: "Series B! We're taking the floor upstairs: a training library and a real server room." },
     { name: 'Series C', at: 4e8, line: "Series C closed. Game room and a client lobby. Investors love a lobby." },
-    { name: 'IPO', at: 8e9, line: "🔔 We rang the bell! Atlas is a public company: ticker ATLS. From today every day is a quarter, and Wall Street is watching. Thank you. Seriously." },
+    { name: 'IPO', at: 8e9, line: "We rang the bell! Atlas is a public company: ticker ATLS. From today every day is a quarter, and Wall Street is watching. Thank you. Seriously." },
   ];
 
   // After the IPO the company is valued by the market. Milestones come at 1, 2.5 and 5 × every power of ten, forever;
@@ -507,12 +507,12 @@ window.WF_DATA = (() => {
 
   // Things that switch on as your career grows. Dana explains each one.
   const UNLOCKS = [
-    { career: 1, id: 'hustle', title: 'Hustle', text: "Pro tip: when you're watching the team work, tap Hustle (or hold it) and everyone works faster. Up to 3× while you keep at it. 🔥" },
-    { career: 2, id: 'hiring', title: 'Hiring', text: "HR approved headcount! I've sent you 3 referrals. Each one opens a blind CV: you only find out who you hired when you open it. 🎁" },
-    { career: 2, id: 'rush', title: 'Espresso shots', text: "Tip: if you're waiting on a project, rush it with an espresso shot. ⚡ You get a new shot every 20 minutes." },
+    { career: 1, id: 'hustle', title: 'Hustle', text: "Pro tip: when you're watching the team work, tap Hustle (or hold it) and everyone works faster. Up to 3× while you keep at it." },
+    { career: 2, id: 'hiring', title: 'Hiring', text: "HR approved headcount! I've sent you 3 referrals. Each one opens a blind CV: you only find out who you hired when you open it." },
+    { career: 2, id: 'rush', title: 'Espresso shots', text: "Tip: if you're waiting on a project, rush it with an espresso shot. You get a new shot every 20 minutes." },
     { career: 3, id: 'size:M', title: 'Sprints', text: 'Two-person Sprints are open: three minutes, much better pay. Pair people whose skills match what the client needs.' },
     { career: 3, id: 'commit', title: 'Daily commitment', text: "Each morning I'll ask what you're committing to. Pick a target, hit it, get rewarded. Miss it and… well, you get nothing. No pressure. 🙂" },
-    { career: 4, id: 'breaks', title: 'Breaks', text: 'Wellbeing matters! The Breaks page has three quick games: a daily word, Inbox Zero and Stack. Each one pays out a boost. ☕' },
+    { career: 4, id: 'breaks', title: 'Breaks', text: 'Wellbeing matters! The Breaks page has three quick games: a daily word, Inbox Zero and Stack. Each one pays out a boost.' },
     { career: 5, id: 'league', title: 'Manager league', text: "Fun fact: you're ranked every week against other managers by client stars. Top two move up a league. I'm told Derek takes it very seriously." },
     { career: 6, id: 'gear', title: 'IT equipment', text: 'IT has a budget now! Great deliveries sometimes come with new equipment for your team. It equips itself.' },
     { career: 7, id: 'size:L', title: 'Projects', text: 'Ten-minute Projects are open. Bigger clients, bigger cheques.' },
@@ -877,12 +877,12 @@ window.WF_DATA = (() => {
 
   // Inbox Zero: what pops up. pts: points per tap (phishing costs points and your combo). life: seconds on screen.
   const PINGS = {
-    chat: { icon: '💬', pts: 1, w: 34, life: 2.1, lines: ['quick q', 'u there?', 'got a sec?', 'lol', 'ping', '+1', 'see thread', 'thoughts?'] },
-    mail: { icon: '✉️', pts: 1, w: 26, life: 2.2, lines: ['Re: Re: Fwd:', 'Per my last email', 'Action needed', 'Quick sync?', 'Reminder!', 'FYI'] },
-    meet: { icon: '📅', pts: 1, w: 16, life: 2, lines: ['Sync re: sync', 'Standup', 'All-hands', '1:1', 'Brainstorm', 'Retro'] },
-    ceo: { icon: '⭐', pts: 3, w: 8, life: 1.3, lines: ['CEO: got a min?', 'From the CEO', 'Board deck?'] },
-    phish: { icon: '🎣', pts: -2, w: 12, life: 2, phish: true, lines: ['You won an iPad!', 'Gift cards ASAP', 'Verify password', 'Free crypto'] },
-    coffee: { icon: '☕', pts: 0, w: 4, life: 1.6, bonus: 2, lines: ['Coffee run!'] },
+    chat: { icon: 'inbox', pts: 1, w: 34, life: 2.1, lines: ['quick q', 'u there?', 'got a sec?', 'lol', 'ping', '+1', 'see thread', 'thoughts?'] },
+    mail: { icon: 'mail', pts: 1, w: 26, life: 2.2, lines: ['Re: Re: Fwd:', 'Per my last email', 'Action needed', 'Quick sync?', 'Reminder!', 'FYI'] },
+    meet: { icon: 'calendar', pts: 1, w: 16, life: 2, lines: ['Sync re: sync', 'Standup', 'All-hands', '1:1', 'Brainstorm', 'Retro'] },
+    ceo: { icon: 'star', pts: 3, w: 8, life: 1.3, lines: ['CEO: got a min?', 'From the CEO', 'Board deck?'] },
+    phish: { icon: 'hook', pts: -2, w: 12, life: 2, phish: true, lines: ['You won an iPad!', 'Gift cards ASAP', 'Verify password', 'Free crypto'] },
+    coffee: { icon: 'breaks', pts: 0, w: 4, life: 1.6, bonus: 2, lines: ['Coffee run!'] },
   };
   // Stack: each new floor of Atlas HQ gets a department; these are the landmarks on the way up.
   const FLOORS = { 5: 'Mailroom', 10: 'Marketing', 15: 'Legal', 20: 'Engineering', 25: 'Executive suite', 30: 'Rooftop bar', 40: 'Helipad', 50: 'Low orbit', 75: 'The Moon', 100: 'Mars office' };

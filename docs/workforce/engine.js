@@ -349,7 +349,7 @@
         const injection = round.at * 0.2;
         S.cash += injection;
         message({ kind: 'funding', from: 'ceo', text: round.line, round: S.funding, amount: injection });
-        addLog(`🎉 ${round.name} raised`, 'good');
+        addLog(`${round.name} raised`, 'good');
         emit('funding', { round: S.funding, injection });
         if (S.funding === D.FUNDING.length - 1) ipo();
       }
@@ -780,7 +780,7 @@
         const o = OFFICE[b.id];
         const lname = o.levels ? o.levels[lvl(b.id) - 1] : `level ${lvl(b.id)}`;
         addLog(`${o.name} upgraded (${lname})`, 'good');
-        if (b.id === 'pmo') message({ kind: 'dana', from: 'dana', text: 'The project office is open! Autopilot is on: when a delivery has waited five minutes, they sign it off and start the next project, even while you are away. You can switch it off on Home. 🤖' });
+        if (b.id === 'pmo') message({ kind: 'dana', from: 'dana', text: 'The project office is open! Autopilot is on: when a delivery has waited five minutes, they sign it off and start the next project, even while you are away. You can switch it off on Home.' });
         emit('built', { id: b.id, lvl: lvl(b.id) });
       }
       checkAchievements();
@@ -972,7 +972,7 @@
       c.tier = tier;
       c.target = c.targets[tier];
       const m = S.inbox.find(x => x.kind === 'commit' && !x.done);
-      const replies = c.ipo ? ['Prudent. The Street likes no surprises.', "In line it is. Let's not disappoint.", 'Aggressive?! Bold. If we beat this, ATLS flies. 🚀'] : ['Sensible. Steady wins.', 'Ambitious. I like it.', "Moonshot?! Bold. Let's go. 🚀"];
+      const replies = c.ipo ? ['Prudent. The Street likes no surprises.', "In line it is. Let's not disappoint.", 'Aggressive?! Bold. If we beat this, ATLS flies.'] : ['Sensible. Steady wins.', 'Ambitious. I like it.', "Moonshot?! Bold. Let's go."];
       if (m) m.done = { idx: tier, at: now(), reply: replies[tier] };
       if (c.progress >= c.target) payCommit();
       return { tier };
@@ -994,8 +994,8 @@
         const pop = [0.04, 0.08, 0.15][c.tier];
         S.stats.beats++;
         kick(pop, `Atlas beats ${commitName(c.tier).toLowerCase()} guidance`);
-        message({ kind: 'dana', from: 'cfo', text: `Earnings call: we beat ${commitName(c.tier).toLowerCase()} guidance! ATLS +${Math.round(pop * 100)}%. ${refsText} and a budget bonus. 📈` });
-      } else message({ kind: 'dana', from: 'dana', text: `Commitment hit: ${commitName(c.tier)}! ${refsText} and a budget bonus. 👏` });
+        message({ kind: 'dana', from: 'cfo', text: `Earnings call: we beat ${commitName(c.tier).toLowerCase()} guidance! ATLS +${Math.round(pop * 100)}%. ${refsText} and a budget bonus.` });
+      } else message({ kind: 'dana', from: 'dana', text: `Commitment hit: ${commitName(c.tier)}! ${refsText} and a budget bonus.` });
       emit('commit', { tier: c.tier, streak: S.streak });
       checkAchievements();
       return true;
@@ -1080,7 +1080,7 @@
         if (pos <= 1 && S.leagueTier < D.LEAGUES.length - 1) S.leagueTier++;
         else if (pos === rows.length - 1 && S.leagueTier > 0) S.leagueTier--;
         if (pos === 0) S.stats.weekWins++;
-        const move = S.leagueTier > oldTier ? ` Promoted to ${D.LEAGUES[S.leagueTier]}! 🎉` : S.leagueTier < oldTier ? ` Dropped to ${D.LEAGUES[S.leagueTier]}. We'll bounce back.` : '';
+        const move = S.leagueTier > oldTier ? ` Promoted to ${D.LEAGUES[S.leagueTier]}!` : S.leagueTier < oldTier ? ` Dropped to ${D.LEAGUES[S.leagueTier]}. We'll bounce back.` : '';
         if (S.leagueTier > oldTier) kick(0.02, 'Atlas named a best place to work');
         message({ kind: 'dana', from: 'dana', text: `Week's done: you finished #${pos + 1} of ${rows.length} in ${D.LEAGUES[oldTier]} with ${S.league.points}★.${move} +${reward} referrals.` });
         const winner = rows[0];
@@ -1143,7 +1143,7 @@
       while (capStep(st.capIdx) <= marketCap()) st.capIdx++;
       S.unlocked.ipo = true;
       S.tickets++;
-      message({ kind: 'dana', from: 'dana', text: "We're public! The news reached a headhunter, and a Legend wants to join us. Open the Headhunter box on the Hiring page. 🎁" });
+      message({ kind: 'dana', from: 'dana', text: "We're public! The news reached a headhunter, and a Legend wants to join us. Open the Headhunter box on the Hiring page." });
       emit('ipo', { price: st.price, cap: marketCap() });
       checkAchievements();
     }
@@ -1205,7 +1205,7 @@
       if (legend) S.tickets++;
       else addRefs(5, 'market cap');
       message({ kind: 'milestone', from: 'ceo', text: `${name ? name + '! ' : ''}ATLS just passed a ${money(capStep(i))} market cap. ${legend ? 'A headhunter found us another Legend.' : 'Five referrals for the hiring fair.'} Brand value: revenue +5% for good.` });
-      addLog(`📈 ${money(capStep(i))} market cap`, 'good');
+      addLog(`${money(capStep(i))} market cap`, 'good');
       emit('marketcap', { i, cap: capStep(i), name, legend });
       checkAchievements();
     }
@@ -1227,7 +1227,7 @@
       S.stock.synergy += tg.boost;
       S.stats.acquisitions++;
       kick(0.05, `Atlas acquires ${tg.name}`);
-      message({ kind: 'dana', from: 'ceo', text: `We just bought ${tg.name}, the ${tg.sector} company from ${tg.city}! Their customers are ours now: revenue +15% for good. 🤝` });
+      message({ kind: 'dana', from: 'ceo', text: `We just bought ${tg.name}, the ${tg.sector} company from ${tg.city}! Their customers are ours now: revenue +15% for good.` });
       addLog(`Acquired ${tg.name}`, 'good');
       checkAchievements();
       return tg;
@@ -1240,7 +1240,7 @@
       'Nice. That one takes 15 seconds. Projects run in real time, even when this tab is closed. Your team will message you if they need you.',
       "Done! Sign it off to see what the client thinks. Every delivery gets a review: more stars mean more revenue, XP and referrals.",
       "Great review! Revenue lands in your budget. Let's spend some: build a coffee bar in the Office. Happy people do better work.",
-      "Coffee's on the way. ☕ Last thing: keep your projects busy. Start another one, then go do your actual job. I'll ping you when something needs you.",
+      "Coffee's on the way. Last thing: keep your projects busy. Start another one, then go do your actual job. I'll ping you when something needs you.",
     ];
     function advanceTut(step) {
       S.tut = step;
