@@ -164,8 +164,9 @@
       + (isStandalone() ? '' : `<button class="sheet-item" data-act="install">${icon('install')}<span>Install on this device</span></button>`)
       + `<button class="sheet-item" data-act="decoy">${icon('report')}<span>Report view</span><span class="right muted">hides the game</span></button>`;
   }
-  const openSheet = () => { renderSheet(); $('#sheet').classList.remove('hidden'); updateCoach(); };
-  const closeSheet = () => $('#sheet').classList.add('hidden');
+  // The coach is placed again once the sheet has finished sliding up.
+  const openSheet = () => { renderSheet(); $('#sheet').classList.remove('hidden'); updateCoach(); setTimeout(updateCoach, 250); };
+  const closeSheet = () => { $('#sheet').classList.add('hidden'); updateCoach(); };
 
   function go(v) {
     if (isLocked(v)) return toast(GATE[v] === 'ipo' ? 'Investors opens when Atlas goes public' : `${LABEL[v]} unlocks at career level ${gateLevel(GATE[v])}`);
@@ -207,7 +208,7 @@
       <span class="logo">${A.logo(w.offer.client)}</span>
       <div class="grow"><div class="ws-title"><b>${esc(w.offer.name)}</b> <span class="muted small">· ${esc(w.offer.client)}</span></div>
         <div class="ws-meta">${stack(w.team)}<span class="muted small">${sizeLabel(w.offer)}</span>${w.offer.vip ? '<span class="chip vip">VIP</span>' : ''}</div>
-        ${done ? '<div class="small good">Delivered. Waiting for your sign-off.</div>' : `<div class="bar"><div class="fill" data-progress="${i}" style="width:${clamp((now() - w.start) / (w.end - w.start), 0, 1) * 100}%"></div></div><div class="muted small" data-eta="${w.end}"></div>`}
+        ${done ? `<div class="small good">Delivered${w.billed ? ` · ${money(w.billed)} billed` : ''}. Waiting for your sign-off.</div>` : `<div class="bar"><div class="fill" data-progress="${i}" style="width:${clamp((now() - w.start) / (w.end - w.start), 0, 1) * 100}%"></div></div><div class="muted small"><span data-wseta="${i}"></span><span data-billed="${i}"></span></div>`}
       </div>
       ${done ? `<button class="btn primary glow" data-act="signoff" data-slot="${i}" data-coach="signoff">Sign off</button>`
         : E.unlocked('rush') ? `<button class="btn rush" data-act="rush" data-slot="${i}" ${S.shots < 1 ? 'disabled' : ''} title="Use an espresso shot: halves the time left">⚡ Rush</button>` : ''}
@@ -231,6 +232,49 @@
     if (!st) return '';
     const ch = st.price / st.open - 1;
     return `<button class="ticker ${big ? 'big' : ''}" data-act="nav" data-view="investors"><b>${st.ticker}</b> ${price(st.price)} <span class="${upDown(ch)}">${pct(ch)}</span></button>`;
+  }
+
+  // --- the live budget: every digit shows, so you can watch it count up
+  const NF2 = new Intl.NumberFormat(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const NF0 = new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 });
+  function cashText(n) {
+    if (n < 1e6) return '$' + NF2.format(n);
+    if (n < 1e15) return '$' + NF0.format(Math.floor(n));
+    const tier = Math.min(SUFFIX.length - 1, Math.floor(Math.log10(n) / 3));
+    return '$' + (n / Math.pow(1000, tier)).toFixed(6) + SUFFIX[tier];
+  }
+  const rateText = r => (r > 0 ? `▲ ${r < 10 ? '$' + r.toFixed(2) : money(r)}/s` : 'No projects billing');
+  const hustleBtn = cls => (E.unlocked('hustle') ? `<button class="hustle ${cls || ''}" data-act="hustle" aria-label="Hustle: tap or hold to make everyone work faster">
+    <span class="hs-clip"><span class="hs-fill"></span></span><span class="hs-ico" aria-hidden="true">🔥</span><b>Hustle</b><span class="hs-x">×1.0</span></button>` : '');
+  // Revenue per five minutes over the last hour, oldest first; the last bucket is the one filling now.
+  function trendBuckets() {
+    const b = Math.floor(now() / 300e3);
+    const out = Array.from({ length: 12 }, (_, i) => ({ from: (b - 11 + i) * 300e3, v: 0 }));
+    for (const [k, x] of S.stats.minRevenue) { const i = Math.floor(k / 5) - (b - 11); if (i >= 0 && i < 12) out[i].v += x; }
+    return out;
+  }
+  const clock = t => new Date(t).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+  function trendHtml() {
+    const b = trendBuckets();
+    const max = Math.max(...b.map(x => x.v), 1e-9);
+    return `<div class="trend" role="img" aria-label="Revenue per five minutes, last hour">${b.map((x, i) => {
+      const label = `${clock(x.from)}–${i === 11 ? 'now' : clock(x.from + 5 * 60e3)}: ${money(x.v)}`;
+      return `<span class="tb ${i === 11 ? 'now' : ''}" tabindex="0" data-tip="${esc(label)}" aria-label="${esc(label)}"><i style="height:${x.v ? Math.max(4, 100 * x.v / max) : 0}%"></i></span>`;
+    }).join('')}<div class="trend-tip hidden"></div></div>
+      <details class="ch-table"><summary>Table</summary><table class="table"><thead><tr><th>Five minutes from</th><th class="num">Revenue</th></tr></thead><tbody>
+        ${b.slice().reverse().map(x => `<tr><td>${esc(clock(x.from))}</td><td class="num">${money(x.v)}</td></tr>`).join('')}</tbody></table></details>`;
+  }
+  function hudCard() {
+    const today = S.stats.dayRevenue[E.dayKey(now())] || 0;
+    const auto = E.lvl('pmo')
+      ? `<span class="toggle ${S.settings.autopilot ? 'on' : ''}" data-act="setting" data-key="autopilot"><span class="sw"></span>🤖 Autopilot${S.settings.autopilot ? ': the team keeps working while you are away' : ' is off'}</span>`
+      : `<span class="muted small">🤖 Want it to run itself? A <a data-act="nav" data-view="office">Project office</a> adds autopilot${E.zoneOpen('meeting') ? '' : ' (opens at the Seed round)'}.</span>`;
+    return `<div class="card hud">
+      <div class="hud-main"><div class="muted small">Budget</div><div class="hud-cash" data-cash>${cashText(S.cash)}</div>
+        <div class="hud-sub small"><span class="hud-rate" data-rate>${rateText(E.rate())}</span><span>Today <b data-today>${money(today)}</b></span><span>Last hour <b data-hour>${money(E.lastHour())}</b></span></div></div>
+      <div class="hud-trend"><div class="muted small">Revenue per 5 minutes</div>${trendHtml()}</div>
+      ${hustleBtn('big')}
+      <div class="hud-foot">${auto}</div></div>`;
   }
 
   function floorModel() {
@@ -258,7 +302,7 @@
     if (w) {
       if (t >= w.end) return { p: desk || A.spot('coffee', idx), b: '✅' };
       if (w.team.length > 1 && E.lvl('rooms') > 0 && phase < 3) return { p: A.spot('meeting', (S.ws.indexOf(w) % E.lvl('rooms')) * 4 + w.team.indexOf(id)), b: '🗣️' };
-      return { p: desk || A.spot('coffee', idx), b: pending ? '💬' : '💻' };
+      return { p: desk || A.spot('coffee', idx), b: pending ? '💬' : E.hustleLevel() > 0.05 ? '🔥' : '💻' };
     }
     if (pending) return { p: desk || A.spot('coffee', idx), b: '💬' };
     if (!desk || phase < 3) return { p: A.spot('coffee', idx), b: '☕' };
@@ -342,12 +386,13 @@
       const sub = on ? 'Ready' : k === 'word' ? 'Done for today' : `in ${fmtDur((E.gameReadyAt(k) - now()) / 1000)}`;
       return `<button class="break-btn ${on ? 'on' : ''}" data-act="game" data-g="${k}"><span class="bi">${GAME_ICON[k]}</span><span><b>${esc(g.name)}</b><span class="muted small">${sub}</span></span></button>`;
     }).join('');
-    return `<div class="card"><div class="card-title">Breaks <span class="muted small">· two-minute games, each pays a boost</span><span class="spacer"></span>${boostHtml()}</div><div class="break-row">${items}</div></div>`;
+    return `<div class="card"><div class="card-title">Breaks <span class="muted small">· quick games that pay out boosts</span><span class="spacer"></span>${boostHtml()}</div><div class="break-row">${items}</div></div>`;
   }
-  const GAME_ICON = { word: '🔤', expense: '🧾', memory: '☕' };
+  const GAME_ICON = { word: '🔤', inbox: '📥', stack: '🏢' };
 
   VIEWS.home = () => `
     <div class="page-head"><div><div class="muted small">${greeting()}</div><h1>Home</h1></div>${tickerChip()}${commitChip()}</div>
+    ${S.tut === -1 ? hudCard() : ''}
     ${nextCard()}
     ${installCard()}
     <div class="home-grid">
@@ -381,7 +426,7 @@
     return `
     <div class="page-head"><div><div class="muted small">${busy}/${E.wsCount()} workstreams busy${E.wsCount() < 5 ? ' · more with meeting rooms' : ''}</div><h1>Projects</h1></div>${shotsHtml()}${boostHtml()}
       <div class="actions"><button class="btn" data-act="refresh" ${cd > 0 ? 'disabled' : ''}>${cd > 0 ? `New offers in ${fmtDur(cd / 1000)}` : 'Refresh offers'}</button></div></div>
-    <div class="card"><div class="card-title">In flight</div>${wsList()}</div>
+    <div class="card"><div class="card-title">In flight<span class="spacer"></span>${hustleBtn()}</div>${wsList()}</div>
     <div class="card"><div class="card-title">Offers <span class="muted small">· sized to your team</span></div><div class="offers">${S.offers.map(offerCard).join('')}</div>
       <p class="muted small">Forecasts use your best available people. Matching the roles a client needs helps a lot. Longer jobs pay a little less per minute but keep working while you're in meetings.</p></div>`;
   };
@@ -482,13 +527,13 @@
       const on = ready.includes(k);
       let status;
       if (k === 'word') status = ws.done ? (ws.won ? `Solved in ${ws.guesses.length} ✓${S.games.wordStreak > 1 ? ` · ${S.games.wordStreak}-day streak` : ''}` : 'Not today. New word tomorrow.') : `${6 - ws.guesses.length} tries left`;
-      else status = on ? 'Reward ready' : `Next reward in ${fmtDur((E.gameReadyAt(k) - now()) / 1000)} · play for fun meanwhile`;
+      else status = (on ? 'Reward ready' : `Next reward in ${fmtDur((E.gameReadyAt(k) - now()) / 1000)} · play for fun meanwhile`) + (S.games.best[k] ? ` · best ${S.games.best[k]}` : '');
       const btn = k === 'word' && ws.done ? 'See result' : on ? 'Play' : 'Practise';
       return `<div class="card game-card ${on ? 'on' : ''}"><div class="game-ico">${GAME_ICON[k]}</div><div class="grow"><b>${esc(g.name)}</b><div class="small">${esc(g.desc)}</div>
         <div class="muted small">Reward: ${esc(g.reward)} · ${esc(status)}</div></div><button class="btn ${on ? 'primary' : ''}" data-act="game" data-g="${k}" data-coach="game-${k}">${btn}</button></div>`;
     };
-    return `<div class="page-head"><div><div class="muted small">Wellbeing · two-minute brain breaks that pay out boosts</div><h1>Breaks</h1></div>${shotsHtml()}${boostHtml()}</div>
-      ${card('word')}${card('expense')}${card('memory')}
+    return `<div class="page-head"><div><div class="muted small">Wellbeing · quick brain breaks that pay out boosts</div><h1>Breaks</h1></div>${shotsHtml()}${boostHtml()}</div>
+      ${card('word')}${card('inbox')}${card('stack')}
       <p class="muted small">Espresso shots rush a running project. Revenue boosts stack: a new one adds time to the current one.</p>`;
   };
 
@@ -545,7 +590,7 @@
     const builds = S.builds.map(b => {
       const o = E.OFFICE[b.id];
       return `<div class="ws"><div class="ws-ico">🏗️</div><div class="grow"><b>${esc(o.name)}</b> → level ${E.lvl(b.id) + 1}
-        <div class="bar"><div class="fill" style="width:${clamp((now() - b.start) / (b.end - b.start), 0, 1) * 100}%"></div></div><div class="muted small" data-eta="${b.end}"></div></div></div>`;
+        <div class="bar"><div class="fill" data-bprog="${b.id}" style="width:${clamp((now() - b.start) / (b.end - b.start), 0, 1) * 100}%"></div></div><div class="muted small" data-beta="${b.id}"></div></div></div>`;
     }).join('');
     const zones = Object.entries(D.ZONES);
     const upg = zones.map(([zid, z]) => {
@@ -566,7 +611,7 @@
     }).join('');
     return `<div class="page-head"><div><div class="muted small">${money(S.cash)} budget · ${E.crews()} build crew${E.crews() > 1 ? 's' : ''}</div><h1>Office</h1></div></div>
       <div class="card">${floorHtml()}</div>
-      ${builds ? `<div class="card"><div class="card-title">Under construction</div><div class="builds">${builds}</div></div>` : ''}
+      ${builds ? `<div class="card"><div class="card-title">Under construction<span class="spacer"></span>${hustleBtn()}</div><div class="builds">${builds}</div></div>` : ''}
       <div class="upgrades">${upg}</div>`;
   };
 
@@ -607,6 +652,17 @@
           ${next ? `<div class="small">Next: <b>${esc(next.name)}</b> at ${money(next.at)} lifetime revenue</div><div class="bar" style="margin:8px 0"><div class="fill green" style="width:${clamp(100 * S.lifetime / next.at, 0, 100)}%"></div></div>` : '<div class="small good">Every milestone reached. Legendary.</div>'}
           <div class="rounds">${rounds}</div><p class="muted small">Each round adds a funding injection, revenue ×1.5 for good, and opens more office space.</p></div>
       </div>
+      <div class="card"><div class="card-title">Company stats</div><div class="stat-grid">
+        <div class="stat"><label>Lifetime revenue</label><b>${money(S.lifetime)}</b></div>
+        <div class="stat"><label>Best day</label><b>${money(S.stats.bestDay)}</b></div>
+        <div class="stat"><label>Billed while working</label><b>${money(S.stats.billed)}</b></div>
+        <div class="stat"><label>Time saved hustling</label><b>${fmtDur(S.stats.hustled)}</b></div>
+        <div class="stat"><label>Calls answered</label><b>${fmt(S.stats.calls)}</b></div>
+        <div class="stat"><label>Autopilot deliveries</label><b>${fmt(S.stats.autoDelivered)}</b></div>
+        <div class="stat"><label>Espresso shots used</label><b>${fmt(S.stats.rushes)}</b></div>
+        <div class="stat"><label>Inbox Zero best</label><b>${fmt(S.games.best.inbox || 0)}</b></div>
+        <div class="stat"><label>Stack best</label><b>${fmt(S.games.best.stack || 0)} floors</b></div>
+      </div></div>
       <div class="card"><div class="card-title">Badges <span class="muted small">${Object.keys(S.achievements).length}/${E.ACH.length} · each +1% team skill</span></div><div class="badges">${ach}</div></div>`;
   };
 
@@ -628,7 +684,7 @@
       <div class="row" style="margin-top:0"><button class="btn" data-act="transferImport">Import progress</button></div>
     </div>
     <div class="card"><div class="card-title">Help</div>
-      <p class="small" style="margin-top:0">Projects run in real time, even with this tab closed. Check in whenever suits you: sign off deliveries, answer your team, start the next project. Waiting on something? Rush it with an espresso shot, or take a break: the mini-games pay out boosts.</p>
+      <p class="small" style="margin-top:0">Projects run in real time, even with this tab closed. Check in whenever suits you: sign off deliveries, answer your team, start the next project. Waiting on something? Hold Hustle to speed everyone up, rush it with an espresso shot, or take a break: the mini-games pay out boosts.</p>
       <p class="muted small">${compact() ? 'Tap ⧉ at the top' : 'Press <b>Esc</b> or <b>`</b>'} for a very boring report.</p>
       <div class="row"><button class="btn danger" data-act="reset">Reset everything</button></div>
     </div>`;
@@ -658,15 +714,94 @@
   let lastReady = '', lastReadyToast = '';
   function live() {
     const t = now();
-    $$('[data-progress]').forEach(el => {
-      const w = S.ws[+el.dataset.progress];
-      if (w) el.style.width = clamp((t - w.start) / (w.end - w.start), 0, 1) * 100 + '%';
-    });
     $$('[data-eta]').forEach(el => {
       const at = +el.dataset.eta;
       el.textContent = at > t ? `${fmtDur((at - t) / 1000)} to go` : 'Done';
     });
     updateCoach();
+  }
+  const toGo = x => (x ? (x.end > now() ? `${fmtDur((x.end - now()) / 1000)} to go` : 'Done') : '');
+  // Money, progress bars and the hustle meter move every animation frame (billing and hustle are
+  // continuous); the smaller text around them is refreshed four times a second.
+  let lastSlow = 0;
+  function frame() {
+    requestAnimationFrame(frame);
+    if (document.hidden || !$('#decoy').classList.contains('hidden')) return;
+    E.accrue();
+    const t = now();
+    const prog = x => clamp((t - x.start) / (x.end - x.start), 0, 1) * 100 + '%';
+    for (const el of $$('[data-progress]')) { const w = S.ws[+el.dataset.progress]; if (w) el.style.width = prog(w); }
+    for (const el of $$('[data-bprog]')) { const b = S.builds.find(x => x.id === el.dataset.bprog); if (b) el.style.width = prog(b); }
+    const cash = cashText(S.cash);
+    for (const el of $$('[data-cash]')) {
+      el.textContent = cash;
+      el.classList.toggle('long', cash.length > 12);
+      el.classList.toggle('xlong', cash.length > 16);
+    }
+    const lvl = E.hustleLevel(t);
+    for (const b of $$('.hustle')) {
+      b.style.setProperty('--h', lvl);
+      b.querySelector('.hs-x').textContent = '×' + (1 + (D.BALANCE.hustleMax - 1) * lvl).toFixed(1);
+      b.classList.toggle('hot', lvl > 0.95);
+    }
+    if (t - lastSlow < 250) return;
+    lastSlow = t;
+    $('#cashChip').textContent = money(S.cash);
+    for (const el of $$('[data-rate]')) el.textContent = rateText(E.rate(t));
+    for (const el of $$('[data-today]')) el.textContent = money(S.stats.dayRevenue[E.dayKey(t)] || 0);
+    for (const el of $$('[data-hour]')) el.textContent = money(E.lastHour(t));
+    for (const el of $$('[data-wseta]')) el.textContent = toGo(S.ws[+el.dataset.wseta]);
+    for (const el of $$('[data-billed]')) { const w = S.ws[+el.dataset.billed]; el.textContent = w && w.billed ? ` · ${money(w.billed)} billed` : ''; }
+    for (const el of $$('[data-beta]')) el.textContent = toGo(S.builds.find(x => x.id === el.dataset.beta));
+  }
+  // Hustle: a tap gives one push and holding keeps pushing. Sparks fly unless stealth mode is on.
+  function hustleTap(btn) {
+    if (!E.hustle() || S.settings.stealth || !btn) return;
+    btn.classList.remove('tap');
+    void btn.offsetWidth;
+    btn.classList.add('tap');
+    const sp = document.createElement('span');
+    sp.className = 'spark';
+    sp.textContent = pick(['🔥', '⚡', '💨', '💪']);
+    sp.style.left = 15 + Math.random() * 70 + '%';
+    btn.appendChild(sp);
+    setTimeout(() => sp.remove(), 700);
+  }
+  // Hover and focus readout for the revenue trend bars.
+  function trendTip(tb, show) {
+    const box = tb.closest('.trend'), tip = box && box.querySelector('.trend-tip');
+    if (!tip) return;
+    if (!show) { tip.classList.add('hidden'); return; }
+    const [when, value] = tb.dataset.tip.split(': ');
+    const b = document.createElement('b'), sp = document.createElement('span');
+    b.textContent = value;
+    sp.textContent = when;
+    tip.replaceChildren(b, sp);
+    tip.classList.remove('hidden');
+    tip.style.left = clamp(tb.offsetLeft + tb.offsetWidth / 2, tip.offsetWidth / 2, box.clientWidth - tip.offsetWidth / 2) + 'px';
+  }
+
+  // --- incoming calls: one rings for 15 seconds now and then while you're here
+  const RING_MS = 15000;
+  let ringing = 0;
+  function updateCall() {
+    const el = $('#call');
+    if (el.dataset.state === 'done') return;
+    const c = E.callReady();
+    if (!c) { ringing = 0; el.classList.add('hidden'); return; }
+    if (!ringing) {
+      if (!$('#overlay').classList.contains('hidden') || !$('#decoy').classList.contains('hidden') || document.hidden) return;
+      ringing = now();
+      el.innerHTML = `<span class="call-ico" aria-hidden="true">📞</span><div class="grow"><b>${esc(c.from)}</b><div class="muted small">Incoming call</div><div class="call-bar"><i></i></div></div>
+        <button class="btn" data-act="declineCall" aria-label="Decline">✕</button><button class="btn primary" data-act="answerCall">Answer</button>`;
+      el.classList.remove('hidden');
+      buzz([40, 80, 40]);
+    } else if (now() - ringing > RING_MS) {
+      E.missCall();
+      ringing = 0;
+      el.classList.add('hidden');
+      save();
+    }
   }
 
   // ================================================================ dialogs & reveals
@@ -681,6 +816,8 @@
     toastList.splice(0).forEach(el => el.remove());
   }
   function closeDialog() {
+    stopInbox();
+    stopStack();
     $('#overlay').classList.add('hidden');
     reveal = null;
     if (dialogQueue.length) { const [h, o] = dialogQueue.shift(); openDialog(h, o); return; }
@@ -750,6 +887,7 @@
       <div class="verdict ${r.stars === 5 ? 'v5' : ''}" id="verdict">&nbsp;</div>
       <div class="muted small" style="text-align:center;min-height:16px" id="quote"></div>
       <div class="money" id="money">$0</div>
+      ${r.billed ? `<div class="muted small" style="text-align:center">On top of ${money(r.billed)} billed while the team worked</div>` : ''}
       <div class="xp-list">${r.team.map(id => {
         const st = S.staff[id], up = r.levelups.find(l => l.id === id);
         return `<div class="xp-row">${av(id, 'sm')}<span class="nowrap" style="width:84px;overflow:hidden;text-overflow:ellipsis">${esc(who(id).first)}</span>
@@ -783,11 +921,12 @@
   }
   function showSummary(results) {
     const total = results.reduce((a, r) => a + r.cash, 0);
+    const billed = results.reduce((a, r) => a + r.billed, 0);
     const avg = results.reduce((a, r) => a + r.stars, 0) / results.length;
     const ups = results.flatMap(r => r.levelups);
     const extras = results.map(extrasHtml).join('');
     openDialog(`<h3>${results.length} deliveries signed off</h3>
-      <div class="money">+${money(total)}</div><div class="muted small" style="text-align:center">Average rating ${avg.toFixed(1)}★</div>
+      <div class="money">+${money(total)}</div><div class="muted small" style="text-align:center">Average rating ${avg.toFixed(1)}★${billed ? ` · on top of ${money(billed)} billed while the team worked` : ''}</div>
       <ul class="feed" style="margin-top:12px">${results.map(r => `<li><span class="logo" style="width:22px;height:22px">${A.logo(r.offer.client)}</span><span class="grow">${esc(r.offer.client)} · ${esc(r.offer.name)}</span><span class="stars">${'★'.repeat(r.stars)}</span></li>`).join('')}</ul>
       ${ups.length ? `<div class="extras">${ups.map(u => `<div class="extra">${av(u.id, 'sm')}<span><b>${esc(who(u.id).first)}</b> reached level ${u.to}</span></div>`).join('')}</div>` : ''}
       <div class="extras">${extras}</div>
@@ -903,117 +1042,322 @@
     else toast('Copying needs a secure (https) page');
   }
 
-  // --- breaks: expense review
-  let exp = null;
-  const rnd = (a, b) => a + Math.random() * (b - a);
-  function makeClaim() {
-    const kind = pick(['meal', 'meal', 'flight', 'hotel', 'software', 'office', 'personal']);
-    const c = { kind, title: pick(D.EXPENSES[kind]), who: pick(E.workers()), note: '', ok: true, why: '', cat: { meal: '🍽 Meal', flight: '✈️ Travel', hotel: '🏨 Hotel', software: '💻 Software', office: '📎 Office', personal: '🛍 Other' }[kind] };
-    if (kind === 'meal') { c.amount = rnd(8, 95); if (c.amount > 50) { c.ok = false; c.why = 'Meals: $50 or less'; } }
-    else if (kind === 'flight') { const cls = pick(['Economy', 'Economy', 'Economy', 'Business', 'First']); c.note = cls + ' class'; c.amount = cls === 'Economy' ? rnd(120, 650) : rnd(1500, 6000); if (cls !== 'Economy') { c.ok = false; c.why = 'Flights: economy only'; } }
-    else if (kind === 'hotel') c.amount = rnd(90, 420);
-    else if (kind === 'software') { const ticket = Math.random() < 0.55; c.note = ticket ? `Ticket IT-${Math.floor(rnd(1000, 9999))}` : 'No IT ticket'; c.amount = rnd(9, 300); if (!ticket) { c.ok = false; c.why = 'Software: needs an IT ticket'; } }
-    else if (kind === 'office') c.amount = rnd(4, 90);
-    else { c.amount = rnd(60, 1800); c.ok = false; c.why = 'Nothing personal'; }
-    if (c.ok && Math.random() < 0.15) { c.noReceipt = true; c.ok = false; c.why = 'Every claim needs a receipt'; }
-    return c;
+  // --- breaks: shared end screen for the arcade games
+  function gameEndHtml(kind, score, res, lines) {
+    const g = D.GAMES[kind];
+    const best = S.games.best[kind] || 0;
+    const reward = !res || res.cooldown ? '<div class="muted small">Practice round, no reward this time.</div>'
+      : kind === 'inbox' ? `<div class="extra gold">☕<span>${res.shots ? `<b>+${res.shots} espresso shot${res.shots > 1 ? 's' : ''}</b>` : `No shots this time: score ${g.tiers[0]} or more to earn one`}</span></div>`
+        : `<div class="extra gold">📈<span>Revenue <b>+50% for ${res.boost} minutes</b></span></div>`;
+    const next = g.tiers.find(x => score < x);
+    return `<div class="game-end"><div class="big-num">${score}</div><div class="grow"><div class="small"><b>${esc(g.unit)}</b>${res && res.best ? ' · <b class="good">New best!</b>' : ` · best ${best}`}</div>
+      ${lines ? `<div class="muted small">${lines}</div>` : ''}${reward}
+      ${next ? `<div class="muted small">${next - score} more ${esc(next - score === 1 ? g.unit.replace(/s$/, '') : g.unit)} for the next reward tier</div>` : ''}</div>
+      <button class="btn primary" data-act="game" data-g="${kind}">Play again</button></div>`;
   }
-  function showExpense() {
-    if (exp && exp.timer) clearInterval(exp.timer);
-    exp = null;
-    const wait = E.gameReadyAt('expense') - now();
-    openDialog(`<button class="dlg-x" data-act="closeDialog" aria-label="Close">×</button><h3>Expense review</h3><div class="muted small">Approve or reject each claim against the policy. You have 30 seconds.${wait > 0 ? ` Practice round: the next reward is in ${fmtDur(wait / 1000)}.` : ''}</div>
-      <div class="policy">${D.EXPENSE_POLICY.map(r => `<span class="chip">${esc(r)}</span>`).join('')}</div>
-      <div class="exp-area" id="expArea"><div class="game-result"><button class="btn primary big" data-act="expStart">Start</button><div class="muted small">Keyboard: ← reject, → approve</div></div></div>`, { cls: 'game-dialog expense' });
+  const practiceNote = kind => {
+    const wait = E.gameReadyAt(kind) - now();
+    return wait > 0 ? ` Practice round: the next reward is in ${fmtDur(wait / 1000)}.` : '';
+  };
+
+  // --- breaks: Inbox Zero. Notifications pop up on a 3×3 grid; tap them before they expire.
+  let iz = null;
+  const IZ_MS = 30000;
+  function showInbox() {
+    stopInbox();
+    const g = D.GAMES.inbox;
+    openDialog(`<button class="dlg-x" data-act="closeDialog" aria-label="Close">×</button><h3>Inbox Zero</h3>
+      <div class="muted small game-intro">Tap each notification before it expires. Unbroken streaks multiply your points. ⭐ is the CEO (triple points), ☕ adds two seconds, and 🎣 is phishing: leave it alone.${practiceNote('inbox')}</div>
+      <div class="iz-top"><div class="bar thin grow"><div class="fill" id="izBar" style="width:100%"></div></div><span>Score <b id="izScore">0</b></span><span class="iz-combo" id="izCombo"></span></div>
+      <div class="iz-grid" id="izGrid">${Array.from({ length: 9 }, (_, i) => `<button class="iz-cell" data-act="iz" data-i="${i}" aria-label="Slot ${i + 1}"><span class="iz-key">${i + 1}</span></button>`).join('')}
+        <div class="iz-start" id="izStart"><button class="btn primary big" data-act="izStart">Start</button><div class="muted small">Rewards at ${g.tiers.join(' / ')} points · keys 1–9 work too</div></div></div>
+      <div id="izEnd"></div>`, { cls: 'game-dialog iz-game' });
   }
-  function expStart() {
-    if (exp && exp.timer) clearInterval(exp.timer);
-    exp = { score: 0, right: 0, wrong: 0, end: now() + 30000, cur: makeClaim(), practice: now() < E.gameReadyAt('expense') };
-    $('#expArea').innerHTML = `<div class="exp-top"><div class="bar thin grow"><div class="fill" id="expBar" style="width:100%"></div></div><span>Score <b id="expScore">0</b></span></div>
-      <div id="claim"></div><div class="exp-flash" id="expFlash">&nbsp;</div>
-      <div class="exp-btns"><button class="btn big reject" data-act="exp" data-v="0">✕ Reject</button><button class="btn big approve" data-act="exp" data-v="1">✓ Approve</button></div>`;
-    drawClaim();
-    exp.timer = setInterval(() => {
-      const bar = $('#expBar');
-      if (!exp || !bar) { if (exp) clearInterval(exp.timer); exp = null; return; }
-      bar.style.width = clamp((exp.end - now()) / 300, 0, 100) + '%';
-      if (now() >= exp.end) expFinish();
-    }, 100);
+  function stopInbox() { if (iz) iz.over = true; iz = null; }
+  function izStart() {
+    stopInbox();
+    iz = { score: 0, combo: 0, bestCombo: 0, cleared: 0, missed: 0, phished: 0, t0: now(), end: now() + IZ_MS, next: now() + 400, cells: Array(9).fill(null), over: false };
+    $('#izStart').classList.add('hidden');
+    $('#dialog').classList.add('playing');
+    $('#izEnd').innerHTML = '';
+    $$('.iz-cell').forEach(c => { c.querySelectorAll('.iz-item').forEach(x => x.remove()); });
+    const run = iz;
+    const loop = () => { if (run.over || !document.body.contains($('#izGrid'))) return; izStep(run); requestAnimationFrame(loop); };
+    requestAnimationFrame(loop);
   }
-  function drawClaim() {
-    const c = exp.cur;
-    $('#claim').innerHTML = `<div class="receipt"><div class="r-head">${av(c.who, 'xs')}<span class="muted small">Claimed by ${esc(who(c.who).first)}</span></div>
-      <div class="r-title">${esc(c.title)}</div><div class="r-amount">$${c.amount.toFixed(2)}</div>
-      <div class="r-meta"><span class="chip">${c.cat}</span>${c.note ? `<span class="chip">${esc(c.note)}</span>` : ''}<span class="chip ${c.noReceipt ? 'warn' : ''}">${c.noReceipt ? '⚠️ No receipt' : '🧾 Receipt attached'}</span></div></div>`;
+  function izStep(g) {
+    const t = now();
+    const k = clamp((t - g.t0) / IZ_MS, 0, 1); // 0 → 1 over the round: things speed up
+    $('#izBar').style.width = clamp((g.end - t) / IZ_MS, 0, 1) * 100 + '%';
+    g.cells.forEach((c, i) => {
+      if (!c || t < c.dies) return;
+      if (!c.kind.phish && !c.kind.bonus) { g.missed++; izCombo(g, 0); izFloat(i, 'missed', 'bad'); }
+      izClear(g, i, 'gone');
+    });
+    if (t >= g.end) return izFinish(g);
+    if (t >= g.next) {
+      g.next = t + 780 - 450 * k;
+      const free = g.cells.map((c, i) => (c ? -1 : i)).filter(i => i >= 0);
+      if (free.length) {
+        const kinds = Object.values(D.PINGS);
+        let roll = Math.random() * kinds.reduce((a, x) => a + x.w, 0), kind = kinds[0];
+        for (const x of kinds) { roll -= x.w; if (roll <= 0) { kind = x; break; } }
+        const i = pick(free);
+        const life = kind.life * (1 - 0.3 * k) * 1000;
+        const el = document.createElement('span');
+        el.className = `iz-item ${kind.phish ? 'phish' : ''} ${kind.pts > 1 ? 'vip' : ''} ${kind.bonus ? 'bonus' : ''}`;
+        el.innerHTML = `<span class="iz-ico">${kind.icon}</span><span class="iz-txt">${esc(pick(kind.lines))}</span><i class="iz-life" style="animation-duration:${life}ms"></i>`;
+        $(`.iz-cell[data-i="${i}"]`).appendChild(el);
+        g.cells[i] = { kind, dies: t + life, el };
+      }
+    }
   }
-  function expAnswer(approve) {
-    if (!exp || exp.done || !$('#claim')) return;
-    const c = exp.cur, right = approve === c.ok;
-    if (right) { exp.score++; exp.right++; } else { exp.score = Math.max(0, exp.score - 1); exp.wrong++; }
-    const f = $('#expFlash');
-    f.className = 'exp-flash ' + (right ? 'ok' : 'bad');
-    f.textContent = right ? '✓' : `✕ ${c.ok ? 'That one was within policy' : c.why}`;
-    $('#expScore').textContent = exp.score;
-    buzz(right ? 6 : [25, 30, 25]);
-    exp.cur = makeClaim();
-    drawClaim();
+  function izCombo(g, n) {
+    g.combo = n;
+    g.bestCombo = Math.max(g.bestCombo, n);
+    const m = izMult(n);
+    const el = $('#izCombo');
+    el.textContent = m > 1 ? `Streak ×${m}` : n ? `Streak ${n}` : '';
+    el.classList.toggle('hot', m > 1);
   }
-  function expFinish() {
-    clearInterval(exp.timer);
-    exp.done = true;
-    const res = exp.practice ? null : E.claimGame('expense', exp.score);
+  const izMult = n => (n >= 20 ? 4 : n >= 10 ? 3 : n >= 5 ? 2 : 1);
+  function izClear(g, i, how) {
+    const el = g.cells[i].el;
+    g.cells[i] = null;
+    el.classList.add(how);
+    setTimeout(() => el.remove(), 180);
+  }
+  function izFloat(i, text, cls) {
+    if (S.settings.stealth) return;
+    const cell = $(`.iz-cell[data-i="${i}"]`);
+    if (!cell) return;
+    const f = document.createElement('span');
+    f.className = 'iz-float ' + (cls || '');
+    f.textContent = text;
+    cell.appendChild(f);
+    setTimeout(() => f.remove(), 650);
+  }
+  function izTap(i) {
+    const g = iz;
+    if (!g || g.over || now() >= g.end) return;
+    const c = g.cells[i];
+    if (!c) return;
+    const kind = c.kind;
+    if (kind.phish) {
+      g.phished++;
+      g.score = Math.max(0, g.score + kind.pts);
+      izCombo(g, 0);
+      izFloat(i, `${kind.pts} phished!`, 'bad');
+      buzz([30, 40, 30]);
+      $('#izGrid').classList.remove('shake');
+      void $('#izGrid').offsetWidth;
+      $('#izGrid').classList.add('shake');
+    } else if (kind.bonus) {
+      g.end += kind.bonus * 1000;
+      izFloat(i, `+${kind.bonus}s`, 'good');
+    } else {
+      izCombo(g, g.combo + 1);
+      const pts = kind.pts * izMult(g.combo);
+      g.score += pts;
+      g.cleared++;
+      izFloat(i, `+${pts}`, kind.pts > 1 ? 'gold' : '');
+      buzz(5);
+    }
+    $('#izScore').textContent = g.score;
+    izClear(g, i, 'hit');
+  }
+  function izFinish(g) {
+    g.over = true;
+    g.cells.forEach((c, i) => c && izClear(g, i, 'gone'));
+    const res = E.claimGame('inbox', g.score);
     save();
-    $('#expArea').innerHTML = `<div class="game-result"><div class="big-num">${exp.score}</div><div class="muted small">${exp.right} right · ${exp.wrong} wrong</div>
-      ${res && !res.cooldown ? `<div class="extra gold">☕<span>${res.shots ? `<b>+${res.shots} espresso shot${res.shots > 1 ? 's' : ''}</b>` : 'No shots this time: score 4 or more to earn one'}</span></div>` : '<div class="muted small">Practice round, no reward this time.</div>'}
-      <button class="btn" data-act="expStart">Play again</button></div>`;
+    $('#izEnd').innerHTML = gameEndHtml('inbox', g.score, res, `${g.cleared} cleared · ${g.missed} missed · ${g.phished} phished · longest streak ${g.bestCombo}`);
     renderNav();
   }
 
-  // --- breaks: coffee-order memory
-  let mem = null;
-  const shuffled = a => { const r = a.slice(); for (let i = r.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [r[i], r[j]] = [r[j], r[i]]; } return r; };
-  function showMemory() {
-    const ids = shuffled(E.owned()).slice(0, 8);
-    const extra = ['dana', 'ceo', 'cfo', 'bot', ...D.RIVALS.map(r => 'rival:' + r.id)];
-    for (let k = 0; ids.length < 8; k++) ids.push(extra[k]);
-    const orders = shuffled(D.COFFEES);
-    const cards = shuffled(ids.flatMap((id, i) => [{ id, order: orders[i] }, { id, order: orders[i] }]));
-    mem = { cards, open: [], matched: new Set(), moves: 0, lock: false, practice: now() < E.gameReadyAt('memory') };
-    openDialog(`<button class="dlg-x" data-act="closeDialog" aria-label="Close">×</button><h3>Coffee orders</h3><div class="muted small">Flip two cards to find each person's order. Fewer moves, bigger boost.${mem.practice ? ` Practice round: the next reward is in ${fmtDur((E.gameReadyAt('memory') - now()) / 1000)}.` : ''}</div>
-      <div class="mem-top"><span>Moves <b id="memMoves">0</b></span><span class="muted small">8 is perfect</span></div>
-      <div class="mem-grid">${cards.map((c, i) => `<button class="mcard" data-act="mem" data-i="${i}" aria-label="Card ${i + 1}"><span class="mc-inner"><span class="mc-back">A</span><span class="mc-front">${av(c.id, 'sm')}<span>${esc(c.order)}</span></span></span></button>`).join('')}</div>
-      <div id="memEnd"></div>`, { cls: 'game-dialog memory' });
+  // --- breaks: Stack. Build Atlas HQ: floors slide in from alternate sides; tap to drop each one.
+  // World units: the first floor is 100 × 100 and FH tall. The view is isometric.
+  let stk = null;
+  const FH = 24, BASE = 100, PERFECT = 4;
+  function showStack() {
+    stopStack();
+    const g = D.GAMES.stack;
+    openDialog(`<button class="dlg-x" data-act="closeDialog" aria-label="Close">×</button><h3>Stack</h3>
+      <div class="muted small game-intro">Tap to drop each floor. Whatever hangs over the edge falls off, so the tower gets narrower. Three perfect drops in a row make it wider again. Rewards at ${g.tiers.join(' / ')} floors.${practiceNote('stack')}</div>
+      <div class="stk-wrap" id="stkWrap"><canvas id="stkCanvas" role="img" aria-label="Stack: tap or press space to drop a floor"></canvas>
+        <div class="stk-hud"><b id="stkScore">0</b><span id="stkMsg">Tap to start</span></div></div>
+      <div id="stkEnd"></div>`, { cls: 'game-dialog stk-game' });
+    const wrap = $('#stkWrap'), cv = $('#stkCanvas');
+    const w = wrap.clientWidth, h = Math.round(Math.min(w * 1.15, window.innerHeight * 0.55));
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    cv.width = w * dpr;
+    cv.height = h * dpr;
+    cv.style.height = h + 'px';
+    const ctx = cv.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    // sc: pixels per world unit (eased towards scT); cyK: where the camera height sits on the canvas.
+    stk = { ctx, w, h, sc: w / 300, scT: w / 300, cy: 0.62, cyK: 0.62, camY: 0, floors: [{ x: 0, z: 0, w: BASE, d: BASE, hue: 190 }], cur: null, falling: [], rings: [], streak: 0, state: 'ready', last: performance.now() };
+    stkSpawn(stk);
+    const run = stk;
+    const loop = ts => { if (run.state === 'stopped' || !document.body.contains(cv)) return; stkStep(run, ts); requestAnimationFrame(loop); };
+    requestAnimationFrame(loop);
   }
-  function memFlip(i) {
-    if (!mem || mem.lock || mem.matched.has(i) || mem.open.includes(i)) return;
-    const el = $(`.mcard[data-i="${i}"]`);
-    if (!el) return;
-    el.classList.add('up');
-    mem.open.push(i);
-    if (mem.open.length < 2) return;
-    mem.moves++;
-    $('#memMoves').textContent = mem.moves;
-    const [a, b] = mem.open;
-    if (mem.cards[a].id === mem.cards[b].id) {
-      mem.open = [];
-      for (const k of [a, b]) { mem.matched.add(k); $(`.mcard[data-i="${k}"]`).classList.add('matched'); }
-      buzz(10);
-      if (mem.matched.size === mem.cards.length) memFinish();
+  function stopStack() { if (stk) stk.state = 'stopped'; stk = null; }
+  function stkSpawn(g) {
+    const top = g.floors[g.floors.length - 1];
+    const axis = g.floors.length % 2 ? 'x' : 'z';
+    g.cur = { x: top.x, z: top.z, w: top.w, d: top.d, hue: (190 + g.floors.length * 9) % 360, axis, dir: 1 };
+    g.cur[axis] = top[axis] - 130;
+  }
+  function stkDrop() {
+    const g = stk;
+    if (!g) return;
+    if (g.state === 'ready') { g.state = 'play'; $('#stkMsg').textContent = ''; $('#dialog').classList.add('playing'); return; }
+    if (g.state !== 'play') return;
+    // Floor i (from 1) spans heights (i - 1)·FH to i·FH; the sliding floor is the next one.
+    const top = g.floors[g.floors.length - 1], c = g.cur, a = c.axis, len = a === 'x' ? 'w' : 'd';
+    const y = (g.floors.length - 1) * FH;
+    const delta = c[a] - top[a];
+    if (Math.abs(delta) <= PERFECT) {
+      c[a] = top[a];
+      g.streak++;
+      if (g.streak >= 3 && c[len] < BASE) {
+        const grow = Math.min(BASE - c[len], 6);
+        c[len] += grow;
+        c[a] -= grow / 2;
+      }
+      g.rings.push({ x: c.x, z: c.z, w: c.w, d: c.d, y: y + FH, t: performance.now() });
+      stkSay(g.streak >= 3 ? `Perfect ×${g.streak}!` : 'Perfect!');
+      buzz(12);
     } else {
-      mem.lock = true;
-      setTimeout(() => {
-        for (const k of [a, b]) { const c = $(`.mcard[data-i="${k}"]`); if (c) c.classList.remove('up'); }
-        if (mem) { mem.open = []; mem.lock = false; }
-      }, 750);
+      g.streak = 0;
+      const overlap = c[len] - Math.abs(delta);
+      if (overlap <= 0) {
+        g.falling.push(Object.assign({ y, vy: 0 }, c));
+        return stkOver(g);
+      }
+      const cut = Object.assign({}, c, { y, vy: 0 });
+      cut[len] = Math.abs(delta);
+      cut[a] = delta > 0 ? top[a] + top[len] : c[a];
+      g.falling.push(cut);
+      c[a] = Math.max(c[a], top[a]);
+      c[len] = overlap;
+      buzz(6);
     }
+    g.floors.push({ x: c.x, z: c.z, w: c.w, d: c.d, hue: c.hue });
+    const n = g.floors.length - 1;
+    $('#stkScore').textContent = n;
+    if (D.FLOORS[n]) stkSay(`Floor ${n}: ${D.FLOORS[n]}`);
+    stkSpawn(g);
   }
-  function memFinish() {
-    const res = mem.practice ? null : E.claimGame('memory', mem.moves);
+  function stkSay(text) {
+    const el = $('#stkMsg');
+    if (!el) return;
+    el.textContent = text;
+    el.classList.remove('pop');
+    void el.offsetWidth;
+    el.classList.add('pop');
+  }
+  function stkOver(g) {
+    g.state = 'over';
+    const n = g.floors.length - 1;
+    const res = E.claimGame('stack', n);
     save();
-    $('#memEnd').innerHTML = `<div class="game-result"><b>All orders matched in ${mem.moves} moves!</b>
-      ${res && !res.cooldown ? `<div class="extra gold">📈<span>Revenue <b>+50% for ${res.boost} minutes</b></span></div>` : '<div class="muted small">Practice round, no reward this time.</div>'}
-      <button class="btn" data-act="game" data-g="memory">Play again</button></div>`;
+    stkSay(n ? `${n} floor${n > 1 ? 's' : ''}!` : 'Missed it');
+    // Zoom out so the whole tower, foundation included, fits.
+    g.scT = Math.min(g.w / 300, (g.h * 0.4) / ((n + 6) * FH / 2 + 60));
+    g.cyK = 0.5;
+    $('#stkEnd').innerHTML = gameEndHtml('stack', n, res, n >= 5 ? `Atlas HQ is ${n * 4} metres tall` : '');
     renderNav();
+  }
+  function stkStep(g, ts) {
+    const dt = Math.min(0.05, (ts - g.last) / 1000);
+    g.last = ts;
+    const n = g.floors.length - 1;
+    if (g.state === 'play') {
+      const c = g.cur, top = g.floors[n];
+      const speed = Math.min(330, 150 * (1 + 0.035 * n));
+      c[c.axis] += c.dir * speed * dt;
+      if (c[c.axis] > top[c.axis] + 130) c.dir = -1;
+      if (c[c.axis] < top[c.axis] - 130) c.dir = 1;
+    }
+    for (const f of g.falling) { f.vy -= 900 * dt; f.y += f.vy * dt; }
+    g.falling = g.falling.filter(f => f.y > g.camY - 400);
+    const target = g.state === 'over' ? ((n - 6) * FH) / 2 : Math.max(0, (n + 1) * FH - 60);
+    const ease = Math.min(1, dt * 4);
+    g.camY += (target - g.camY) * ease;
+    g.sc += (g.scT - g.sc) * ease;
+    g.cy += (g.cyK - g.cy) * ease;
+    stkDraw(g, ts);
+  }
+  // Sky goes from day to dusk to night to space as the tower grows.
+  const SKY = [[0, [191, 227, 255], [234, 246, 255]], [18, [255, 196, 150], [255, 228, 196]], [32, [44, 56, 102], [86, 96, 150]], [55, [8, 10, 26], [26, 28, 56]]];
+  function skyAt(n) {
+    let i = 0;
+    while (i < SKY.length - 2 && n >= SKY[i + 1][0]) i++;
+    const [a, b] = [SKY[i], SKY[i + 1]];
+    const k = clamp((n - a[0]) / (b[0] - a[0]), 0, 1);
+    const mix = (p, q) => `rgb(${p.map((v, j) => Math.round(v + (q[j] - v) * k)).join(',')})`;
+    return [mix(a[1], b[1]), mix(a[2], b[2])];
+  }
+  function stkDraw(g, ts) {
+    const { ctx, w, h } = g;
+    const n = g.floors.length - 1;
+    const [skyTop, skyBottom] = skyAt(n);
+    const night = clamp((n - 24) / 12, 0, 1);
+    const bg = ctx.createLinearGradient(0, 0, 0, h);
+    bg.addColorStop(0, skyTop);
+    bg.addColorStop(1, skyBottom);
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, w, h);
+    if (night > 0) {
+      ctx.fillStyle = `rgba(255,255,255,${night * 0.8})`;
+      for (let i = 0; i < 40; i++) ctx.fillRect((i * 97) % w, (i * 53 + i * i * 7) % (h * 0.7), 1.5, 1.5);
+    }
+    // Isometric: +x runs down-right, +z down-left, y up. The foundation's centre sits at (cx, cy).
+    const cx = w / 2, cy = h * g.cy, sc = g.sc, C = 0.866, S2 = 0.5;
+    const P = (x, y, z) => [cx + (x - z) * C * sc, cy + ((x + z - BASE) * S2 - (y - g.camY)) * sc];
+    const quad = (pts, fill) => { ctx.beginPath(); pts.forEach(([px, py], i) => (i ? ctx.lineTo(px, py) : ctx.moveTo(px, py))); ctx.closePath(); ctx.fillStyle = fill; ctx.fill(); };
+    const block = (b, y, hgt, alpha = 1, foundation = false) => {
+      const { x, z } = b, bw = b.w, bd = b.d;
+      ctx.globalAlpha = alpha;
+      const L = foundation ? 52 : 50;
+      quad([P(x, y, z + bd), P(x + bw, y, z + bd), P(x + bw, y + hgt, z + bd), P(x, y + hgt, z + bd)], foundation ? '#8b93a1' : `hsl(${b.hue},45%,${L}%)`);
+      quad([P(x + bw, y, z), P(x + bw, y, z + bd), P(x + bw, y + hgt, z + bd), P(x + bw, y + hgt, z)], foundation ? '#6f7786' : `hsl(${b.hue},45%,${L - 12}%)`);
+      quad([P(x, y + hgt, z), P(x + bw, y + hgt, z), P(x + bw, y + hgt, z + bd), P(x, y + hgt, z + bd)], foundation ? '#a7aebb' : `hsl(${b.hue},55%,${L + 18}%)`);
+      if (!foundation && hgt >= FH) {
+        // windows along both visible faces
+        const glass = night > 0.5 ? 'rgba(255,230,150,.85)' : 'rgba(255,255,255,.45)';
+        const y0 = y + hgt * 0.3, y1 = y + hgt * 0.72;
+        for (let u = 5; u + 7 <= bw - 3; u += 12) quad([P(x + u, y0, z + bd), P(x + u + 7, y0, z + bd), P(x + u + 7, y1, z + bd), P(x + u, y1, z + bd)], glass);
+        for (let u = 5; u + 7 <= bd - 3; u += 12) quad([P(x + bw, y0, z + u), P(x + bw, y0, z + u + 7), P(x + bw, y1, z + u + 7), P(x + bw, y1, z + u)], glass);
+      }
+      ctx.globalAlpha = 1;
+    };
+    const top = g.floors[n];
+    // pieces falling behind the tower first, then the tower, then the ones in front
+    const behind = f => f.x + f.w <= top.x + 0.01 || f.z + f.d <= top.z + 0.01;
+    for (const f of g.falling) if (behind(f)) block(f, f.y, FH, clamp(1 + (f.y - g.camY + 100) / 300, 0, 1));
+    block({ x: 0, z: 0, w: BASE, d: BASE }, -FH * 6, FH * 6, 1, true);
+    g.floors.forEach((f, i) => {
+      if (i === 0) return;
+      const [, py] = P(f.x, i * FH, f.z);
+      if (py > h + 200) return;
+      block(f, (i - 1) * FH, FH);
+    });
+    for (const f of g.falling) if (!behind(f)) block(f, f.y, FH, clamp(1 + (f.y - g.camY + 100) / 300, 0, 1));
+    if (g.state === 'play' || g.state === 'ready') block(g.cur, n * FH, FH);
+    // perfect-drop ripples on the top face
+    g.rings = g.rings.filter(r => ts - r.t < 600);
+    for (const r of g.rings) {
+      const k = (ts - r.t) / 600, grow = 4 + 26 * k;
+      ctx.strokeStyle = `rgba(255,255,255,${1 - k})`;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      [P(r.x - grow, r.y, r.z - grow), P(r.x + r.w + grow, r.y, r.z - grow), P(r.x + r.w + grow, r.y, r.z + r.d + grow), P(r.x - grow, r.y, r.z + r.d + grow)].forEach(([px, py], i) => (i ? ctx.lineTo(px, py) : ctx.moveTo(px, py)));
+      ctx.closePath();
+      ctx.stroke();
+    }
   }
 
   // --- price chart hover (crosshair + tooltip), also driven by the arrow keys
@@ -1092,16 +1436,33 @@
   function hideCoach() { $('#coach').classList.add('hidden'); $('#coachTip').classList.add('hidden'); }
   function updateCoach() {
     if (S.tut < 0 || !$('#overlay').classList.contains('hidden')) return hideCoach();
+    // With the More sheet open, only its items can be pointed at: everything else is underneath it.
+    const sheet = $('#sheet').classList.contains('hidden') ? null : $('#sheet');
+    const bar = $('#tabbar').getBoundingClientRect();
+    const viewTop = $('.topbar').getBoundingClientRect().bottom;
+    const viewBottom = bar.height ? bar.top : window.innerHeight;
+    const ring = $('#coach'), tip = $('#coachTip');
     for (const [key, text] of COACH[S.tut] || []) {
-      const el = $$(`[data-coach="${key}"]`).find(x => x.offsetParent !== null || x.getClientRects().length);
+      const el = $$(`[data-coach="${key}"]`).find(x => (!sheet || sheet.contains(x)) && (x.offsetParent !== null || x.getClientRects().length));
       if (!el) continue;
       const r = el.getBoundingClientRect();
-      if (r.width === 0 || r.bottom < 0 || r.top > window.innerHeight) continue;
-      const ring = $('#coach'), tip = $('#coachTip');
+      if (r.width === 0) continue;
+      tip.classList.remove('hidden');
+      if ($('#view').contains(el) && (r.top < viewTop || r.bottom > viewBottom)) {
+        // On this page but scrolled out of sight: point to it from the edge, rather than back to the menu.
+        const up = r.top < viewTop;
+        ring.classList.add('hidden');
+        tip.textContent = `${up ? '↑' : '↓'} ${text}`;
+        tip.classList.add('edge');
+        Object.assign(tip.dataset, { act: 'coachGo', key });
+        Object.assign(tip.style, { left: (window.innerWidth - tip.offsetWidth) / 2 + 'px', top: (up ? viewTop + 10 : viewBottom - tip.offsetHeight - 10) + 'px' });
+        return;
+      }
+      tip.classList.remove('edge');
+      delete tip.dataset.act;
       Object.assign(ring.style, { left: r.left - 4 + 'px', top: r.top - 4 + 'px', width: r.width + 8 + 'px', height: r.height + 8 + 'px' });
       ring.classList.remove('hidden');
       tip.textContent = text;
-      tip.classList.remove('hidden');
       const above = r.top > 60;
       Object.assign(tip.style, { left: clamp(r.left, 8, window.innerWidth - tip.offsetWidth - 8) + 'px', top: (above ? r.top - 36 : r.bottom + 10) + 'px' });
       return;
@@ -1226,6 +1587,22 @@
   const ACTIONS = {
     nav: d => go(d.view),
     more: () => ($('#sheet').classList.contains('hidden') ? openSheet() : closeSheet()),
+    hustle: (d, e) => { if (e && e.detail === 0) hustleTap(e.target.closest('.hustle')); }, // keyboard; taps arrive as pointerdown
+    answerCall: () => {
+      const r = E.answerCall();
+      const el = $('#call');
+      ringing = 0;
+      if (!r) { el.classList.add('hidden'); return; }
+      save();
+      const what = { quote: `+${money(r.cash)}`, shot: '+1 espresso shot ☕', flow: 'Flow state: everyone works 3× faster for 20 seconds 🔥', boost: 'Revenue +50% for 10 minutes 📈', ref: '+1 referral 🎁' }[r.kind];
+      el.dataset.state = 'done';
+      el.innerHTML = `<span class="call-ico" aria-hidden="true">📞</span><div class="grow"><b>${esc(r.from)}</b><div class="small">“${esc(r.text)}”</div><div class="call-win">${esc(what)}</div></div>`;
+      buzz(15);
+      setTimeout(() => { el.classList.add('hidden'); delete el.dataset.state; }, 3500);
+      renderNav();
+    },
+    declineCall: () => { E.missCall(); ringing = 0; $('#call').classList.add('hidden'); save(); },
+    coachGo: d => { const el = $(`#view [data-coach="${d.key}"]`); if (el) el.scrollIntoView({ block: 'center', behavior: S.settings.stealth ? 'auto' : 'smooth' }); },
     decoy: () => { closeSheet(); toggleDecoy(); },
     closeDialog: () => closeDialog(),
     confirmOk: () => { const cb = confirmCb; confirmCb = null; closeDialog(); if (cb) cb(); },
@@ -1300,8 +1677,8 @@
     game: d => {
       closeSheet();
       if (d.g === 'word') showWord();
-      else if (d.g === 'expense') showExpense();
-      else showMemory();
+      else if (d.g === 'inbox') showInbox();
+      else showStack();
     },
     wkey: d => wordKey(d.k),
     shareWord: () => {
@@ -1309,9 +1686,8 @@
       const grid = ws.guesses.map(g => E.scoreGuess(g, ans).map(v => ['⬜', '🟨', '🟩'][v]).join('')).join('\n');
       copyText(`Atlas daily word ${ws.day} ${ws.won ? ws.guesses.length : 'X'}/6\n${grid}`, 'Result copied');
     },
-    expStart: () => expStart(),
-    exp: d => expAnswer(d.v === '1'),
-    mem: d => memFlip(+d.i),
+    izStart: () => izStart(),
+    iz: (d, e) => { if (e && e.detail === 0) izTap(+d.i); }, // keyboard; taps arrive as pointerdown
     ringBell: () => {
       const b = $('#bell');
       if (!b) return;
@@ -1410,17 +1786,43 @@
     window.addEventListener('scroll', updateCoach, { passive: true });
     window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); installEvent = e; });
     window.addEventListener('appinstalled', () => { installEvent = null; S.settings.installHint = false; toast('Installed. Open Workforce from your home screen.'); });
+    let holdTimer = 0;
+    const stopHold = () => { clearInterval(holdTimer); holdTimer = 0; };
+    document.addEventListener('pointerdown', e => {
+      const cell = e.target.closest && e.target.closest('.iz-cell');
+      if (cell && e.button <= 0) { e.preventDefault(); izTap(+cell.dataset.i); return; }
+      if (e.target.id === 'stkCanvas' && e.button <= 0) { e.preventDefault(); stkDrop(); return; }
+      const btn = e.target.closest && e.target.closest('.hustle');
+      if (!btn || e.button > 0) return;
+      hustleTap(btn);
+      stopHold();
+      holdTimer = setInterval(() => hustleTap(btn), 160);
+    });
+    for (const ev of ['pointerup', 'pointercancel']) document.addEventListener(ev, stopHold);
+    window.addEventListener('blur', stopHold);
+    document.addEventListener('contextmenu', e => { if (e.target.closest && e.target.closest('.hustle')) e.preventDefault(); });
+    document.addEventListener('pointerover', e => { const tb = e.target.closest && e.target.closest('.tb'); if (tb) trendTip(tb, true); });
     document.addEventListener('pointermove', e => {
       const plot = e.target.closest && e.target.closest('.ch-plot');
-      chartActive = !!plot;
+      chartActive = !!plot || !!(e.target.closest && e.target.closest('.trend'));
       if (plot) chartHover(plot, e.clientX);
     });
     document.addEventListener('pointerout', e => {
       const plot = e.target.closest && e.target.closest('.ch-plot');
       if (plot && !plot.contains(e.relatedTarget)) { chartActive = false; chartHide(plot); }
+      const tb = e.target.closest && e.target.closest('.tb');
+      if (tb && !tb.contains(e.relatedTarget)) trendTip(tb, false);
+      const trend = e.target.closest && e.target.closest('.trend');
+      if (trend && !trend.contains(e.relatedTarget)) chartActive = false;
     });
-    document.addEventListener('focusin', e => { if (e.target.classList && e.target.classList.contains('ch-plot')) chartHover(e.target, 0, chartPoints().length - 1); });
-    document.addEventListener('focusout', e => { if (e.target.classList && e.target.classList.contains('ch-plot')) chartHide(e.target); });
+    document.addEventListener('focusin', e => {
+      if (e.target.classList && e.target.classList.contains('ch-plot')) chartHover(e.target, 0, chartPoints().length - 1);
+      if (e.target.classList && e.target.classList.contains('tb')) { chartActive = true; trendTip(e.target, true); }
+    });
+    document.addEventListener('focusout', e => {
+      if (e.target.classList && e.target.classList.contains('ch-plot')) chartHide(e.target);
+      if (e.target.classList && e.target.classList.contains('tb')) { chartActive = false; trendTip(e.target, false); }
+    });
     document.addEventListener('keydown', e => {
       const dlg = $('#dialog');
       const open = !$('#overlay').classList.contains('hidden');
@@ -1428,10 +1830,8 @@
         const k = e.key === 'Enter' ? 'enter' : e.key === 'Backspace' ? 'back' : /^[a-zA-Z]$/.test(e.key) ? e.key.toLowerCase() : '';
         if (k) { e.preventDefault(); wordKey(k); return; }
       }
-      if (open && dlg.classList.contains('expense') && exp && !exp.done) {
-        if (e.key === 'ArrowLeft') { e.preventDefault(); expAnswer(false); return; }
-        if (e.key === 'ArrowRight') { e.preventDefault(); expAnswer(true); return; }
-      }
+      if (open && dlg.classList.contains('iz-game') && iz && /^[1-9]$/.test(e.key)) { e.preventDefault(); izTap(+e.key - 1); return; }
+      if (open && dlg.classList.contains('stk-game') && stk && stk.state !== 'over' && (e.key === ' ' || e.key === 'Enter')) { e.preventDefault(); stkDrop(); return; }
       if (document.activeElement && document.activeElement.classList.contains('ch-plot') && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
         e.preventDefault();
         const plot = document.activeElement;
@@ -1452,7 +1852,7 @@
 
   // ================================================================ loop & boot
 
-  let ticks = 0;
+  let ticks = 0, wasHot = false;
   function tick() {
     E.tick();
     drainEvents();
@@ -1466,6 +1866,10 @@
       if (renderView()) lastReady = readyNow;
     }
     live();
+    updateCall();
+    const hot = E.hustleLevel() > 0.05;
+    if (hot || wasHot) updateFloors();
+    wasHot = hot;
     if (++ticks % 5 === 0) {
       updateFloors();
       renderNav();
@@ -1487,7 +1891,7 @@
 
     // Catch up on time away and summarise it.
     const away = (now() - S.lastSeen) / 1000;
-    const before = { office: JSON.stringify(S.office), inbox: S.inbox.length, price: S.stock ? S.stock.price : 0, splits: S.stock ? S.stock.splits : 0 };
+    const before = { office: JSON.stringify(S.office), inbox: S.inbox.length, price: S.stock ? S.stock.price : 0, splits: S.stock ? S.stock.splits : 0, lifetime: S.lifetime };
     E.tick();
     pendingEvents.length = 0;
     lastReady = lastReadyToast = E.ready().join(',');
@@ -1496,6 +1900,7 @@
     renderView(true);
     updateTitle();
     setInterval(tick, 1000);
+    requestAnimationFrame(frame);
 
     if (transfer) importCode(transfer).catch(() => toast('That transfer link looks incomplete. Try copying it again.'));
     else if (fresh || S.tut === 0 && !S.name) askName();
@@ -1506,7 +1911,9 @@
       const auto = S.autoSummary;
       S.autoSummary = null;
       const lines = [];
-      if (auto) lines.push(`🤖 Autopilot delivered <b>${auto.count}</b> project${auto.count > 1 ? 's' : ''} (avg ${(auto.stars / auto.count).toFixed(1)}★, +${money(auto.cash)})`);
+      const earned = S.lifetime - before.lifetime;
+      if (earned > 0) lines.push(`💰 <b>+${money(earned)}</b> revenue while you were away`);
+      if (auto) lines.push(`🤖 Autopilot delivered <b>${auto.count}</b> project${auto.count > 1 ? 's' : ''} (avg ${(auto.stars / auto.count).toFixed(1)}★)`);
       if (ready) lines.push(`✅ <b>${ready}</b> deliver${ready > 1 ? 'ies' : 'y'} waiting for your sign-off`);
       if (newMsgs > 0) lines.push(`💬 <b>${newMsgs}</b> new message${newMsgs > 1 ? 's' : ''}`);
       if (built) lines.push('🏗️ Office construction finished');
@@ -1534,13 +1941,16 @@
           s.nextMsgAt -= ms;
           if (s.league) { s.league.start -= ms; s.league.end -= ms; }
           s.boost.until -= ms;
-          s.games.expenseAt -= ms;
-          s.games.memoryAt -= ms;
+          s.games.inboxAt -= ms;
+          s.games.stackAt -= ms;
+          s.call.at -= ms;
+          s.hustle.at -= ms; s.hustle.last -= ms;
           for (const a of Object.values(s.alumni)) if (a.startup) a.startup -= ms;
           if (s.stock) { s.stock.last -= ms; s.stock.fairAt -= ms; for (const h of s.stock.hist) h[0] -= ms; }
           tick();
         },
         give: (cash = 0, refs = 0) => { E.state.cash += cash; E.state.referrals += refs; },
+        get stack() { return stk; },
       };
     }
   }

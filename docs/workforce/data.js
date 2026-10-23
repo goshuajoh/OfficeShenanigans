@@ -17,6 +17,10 @@ window.WF_DATA = (() => {
     offlineCapH: 12,
     shotMinutes: 20, // one espresso shot refills every this many minutes
     stockMultiple: 1.5, // market cap = this × trailing daily revenue × sentiment
+    billStars: 2, // running projects bill as they go at this rating; the sign-off pays the rest
+    hustleTap: 0.1, // each tap fills the hustle meter (0 to 1) this much
+    hustleDrain: 0.25, // the meter drains this much per second
+    hustleMax: 3, // work speed with a full meter
   };
 
   const SIZES = {
@@ -459,7 +463,7 @@ window.WF_DATA = (() => {
     { id: 'phones', name: 'Phone booths', zone: 'lounge', max: 25, cost: [4000, 2.6], time: [600, 1.7], fx: l => `+${12 * l}% revenue` },
     { id: 'lounge', name: 'Lounge', zone: 'lounge', max: 3, cost: [6000, 5], time: [900, 2.2], fx: l => `+${2 * l} mood, ${50 * l}% faster recovery` },
     { id: 'recruit', name: 'Recruiting suite', zone: 'lounge', max: 5, cost: [9000, 3.2], time: [1200, 1.8], fx: l => `Senior+ hire odds ×${(1 + 0.15 * l).toFixed(2)}` },
-    { id: 'pmo', name: 'Project office', zone: 'lounge', max: 1, cost: [40000, 1], time: [3600, 1], career: [8], fx: () => 'Autopilot: signs off and restarts projects for you' },
+    { id: 'pmo', name: 'Project office', zone: 'meeting', max: 1, cost: [1500, 1], time: [300, 1], career: [4], fx: () => 'Autopilot: the team keeps working while you are away' },
     { id: 'library', name: 'Training library', zone: 'library', max: 25, cost: [150000, 2.4], time: [1800, 1.6], fx: l => `+${15 * l}% XP` },
     { id: 'servers', name: 'Server room', zone: 'servers', max: 25, cost: [250000, 2.5], time: [2400, 1.6], fx: l => `+${8 * l}% team skill` },
     { id: 'games', name: 'Game room', zone: 'games', max: 3, cost: [8e6, 5], time: [3600, 2], fx: l => `+${2 * l} mood, +${25 * l}% bond` },
@@ -503,11 +507,12 @@ window.WF_DATA = (() => {
 
   // Things that switch on as your career grows. Dana explains each one.
   const UNLOCKS = [
+    { career: 1, id: 'hustle', title: 'Hustle', text: "Pro tip: when you're watching the team work, tap Hustle (or hold it) and everyone works faster. Up to 3× while you keep at it. 🔥" },
     { career: 2, id: 'hiring', title: 'Hiring', text: "HR approved headcount! I've sent you 3 referrals. Each one opens a blind CV: you only find out who you hired when you open it. 🎁" },
     { career: 2, id: 'rush', title: 'Espresso shots', text: "Tip: if you're waiting on a project, rush it with an espresso shot. ⚡ You get a new shot every 20 minutes." },
     { career: 3, id: 'size:M', title: 'Sprints', text: 'Two-person Sprints are open: three minutes, much better pay. Pair people whose skills match what the client needs.' },
     { career: 3, id: 'commit', title: 'Daily commitment', text: "Each morning I'll ask what you're committing to. Pick a target, hit it, get rewarded. Miss it and… well, you get nothing. No pressure. 🙂" },
-    { career: 4, id: 'breaks', title: 'Breaks', text: 'Wellbeing matters! The Breaks page has three two-minute games: a daily word, an expense review and a memory game. Each one pays out a boost. ☕' },
+    { career: 4, id: 'breaks', title: 'Breaks', text: 'Wellbeing matters! The Breaks page has three quick games: a daily word, Inbox Zero and Stack. Each one pays out a boost. ☕' },
     { career: 5, id: 'league', title: 'Manager league', text: "Fun fact: you're ranked every week against other managers by client stars. Top two move up a league. I'm told Derek takes it very seriously." },
     { career: 6, id: 'gear', title: 'IT equipment', text: 'IT has a budget now! Great deliveries sometimes come with new equipment for your team. It equips itself.' },
     { career: 7, id: 'size:L', title: 'Projects', text: 'Ten-minute Projects are open. Bigger clients, bigger cheques.' },
@@ -836,8 +841,8 @@ window.WF_DATA = (() => {
   // cooldown: minutes between rewarded plays. The daily word is once a day.
   const GAMES = {
     word: { name: 'Daily word', desc: 'Guess the five-letter word in six tries. Same word for the whole office, and for lintcheck in the terminal.', reward: 'Referrals and a 30-minute revenue boost' },
-    expense: { name: 'Expense review', desc: '30 seconds to approve or reject claims against the policy.', cooldown: 30, reward: 'Espresso shots' },
-    memory: { name: 'Coffee orders', desc: 'Match everyone to their coffee order. Fewer moves, bigger boost.', cooldown: 30, reward: 'A revenue boost' },
+    inbox: { name: 'Inbox Zero', desc: '30 seconds of notifications. Tap them before they pile up, chain them for combos, and never click the phishing.', cooldown: 30, reward: 'Espresso shots', tiers: [40, 90, 150], unit: 'points' },
+    stack: { name: 'Stack', desc: 'Build Atlas HQ one floor at a time. Tap to drop each floor. Line it up perfectly or the overhang falls off.', cooldown: 30, reward: 'A revenue boost', tiers: [8, 15, 25], unit: 'floors' },
   };
   // Same list and order as terminal/lintcheck.py, so the web and terminal games share the daily word.
   const WORDS = `
@@ -870,21 +875,30 @@ window.WF_DATA = (() => {
     wound write wrong wrote yield young youth
   `.trim().split(/\s+/);
 
-  // Expense review: the policy, and what claims look like.
-  const EXPENSE_POLICY = ['Meals: $50 or less', 'Flights: economy only', 'Software: needs an IT ticket', 'Every claim needs a receipt', 'Nothing personal'];
-  const EXPENSES = {
-    meal: ['Burger Barn', 'Sushi Go', 'Pasta Palace', 'The Salad Bar', 'Taco Town', 'Noodle House', 'Le Fancy Bistro', 'Curry Corner'],
-    flight: ['Flight to Berlin', 'Flight to New York', 'Flight to Singapore', 'Flight to Lisbon', 'Flight to Austin', 'Flight to Tokyo'],
-    hotel: ['Hotel, 2 nights', 'Hotel, 1 night', 'Conference hotel', 'Airport hotel'],
-    software: ['Design tool licence', 'Cloud credits', 'Code editor plugin', 'Analytics add-on', 'Stock photo pack'],
-    office: ['Printer paper', 'Whiteboard markers', 'Desk plant', 'Coffee beans', 'Sticky notes (bulk)', 'HDMI adapter'],
-    personal: ['Jet ski rental', 'Spa weekend', 'Gaming PC (for home)', 'Concert tickets', 'Pet grooming', 'Designer sunglasses', 'Hot tub'],
+  // Inbox Zero: what pops up. pts: points per tap (phishing costs points and your combo). life: seconds on screen.
+  const PINGS = {
+    chat: { icon: '💬', pts: 1, w: 34, life: 2.1, lines: ['quick q', 'u there?', 'got a sec?', 'lol', 'ping', '+1', 'see thread', 'thoughts?'] },
+    mail: { icon: '✉️', pts: 1, w: 26, life: 2.2, lines: ['Re: Re: Fwd:', 'Per my last email', 'Action needed', 'Quick sync?', 'Reminder!', 'FYI'] },
+    meet: { icon: '📅', pts: 1, w: 16, life: 2, lines: ['Sync re: sync', 'Standup', 'All-hands', '1:1', 'Brainstorm', 'Retro'] },
+    ceo: { icon: '⭐', pts: 3, w: 8, life: 1.3, lines: ['CEO: got a min?', 'From the CEO', 'Board deck?'] },
+    phish: { icon: '🎣', pts: -2, w: 12, life: 2, phish: true, lines: ['You won an iPad!', 'Gift cards ASAP', 'Verify password', 'Free crypto'] },
+    coffee: { icon: '☕', pts: 0, w: 4, life: 1.6, bonus: 2, lines: ['Coffee run!'] },
   };
-  const COFFEES = ['Flat white', 'Oat latte', 'Double espresso', 'Cold brew', 'Matcha latte', 'Cappuccino', 'Chai', 'Mocha', 'Americano', 'Hot chocolate'];
+  // Stack: each new floor of Atlas HQ gets a department; these are the landmarks on the way up.
+  const FLOORS = { 5: 'Mailroom', 10: 'Marketing', 15: 'Legal', 20: 'Engineering', 25: 'Executive suite', 30: 'Rooftop bar', 40: 'Helipad', 50: 'Low orbit', 75: 'The Moon', 100: 'Mars office' };
+
+  // Incoming calls ring now and then while you're around. Answer for a small windfall.
+  const CALLS = {
+    quote: ['Can you quote us for a quick fix? We pay upfront.', 'We need a logo by Friday. Deposit is on its way.', 'Our intern broke the website. Help! Paying now.'],
+    shot: ['We sent your team a coffee voucher. Thanks for last time!', 'Our barista robot over-delivered. One espresso, on us.'],
+    flow: ['Big demo in an hour. Can your team sprint?', 'Investor visit today. Look busy, please!'],
+    boost: ["We're telling all our friends about you.", 'You trended on LinkedIn. Our customers want more.'],
+    ref: ['My cousin is looking for a job. Can I send you their CV?', 'I know someone great who wants to join you.'],
+  };
 
   return {
     BALANCE, SIZES, LENGTHS, RARITY, PACKS, ROLES, REVIEWS, VERDICTS, ROLE_NOUN, TRAITS, TITLES, PEOPLE, CAST, RIVALS, RIVAL_LINES, LEAGUES, LEAGUE_REWARDS, CLIENTS, PROJECTS,
     OFFICE, ZONES, FUNDING, CAP_NAMES, ACQ, CAREER_TITLES, UNLOCKS, DECISIONS, IPO_DECISIONS, BANTER, IPO_BANTER, BONUSES, LOW_MOOD, GEAR, GEAR_PCT,
-    GAMES, WORDS, EXPENSE_POLICY, EXPENSES, COFFEES,
+    GAMES, WORDS, PINGS, FLOORS, CALLS,
   };
 })();

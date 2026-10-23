@@ -56,10 +56,13 @@
         achievements: {}, unlocked: {}, seen: {},
         tut: 0,
         stats: { deliveries: 0, stars: 0, five: 0, hires: 0, decisions: 0, builds: 0, panics: 0, longestAway: 0, chats: 0, commits: 0, weekWins: 0, dayStars: {}, autoDelivered: 0, refSrc: {},
-          dayRevenue: {}, packs: 0, legends: 0, rushes: 0, layoffs: 0, games: 0, acquisitions: 0, beats: 0 },
+          dayRevenue: {}, packs: 0, legends: 0, rushes: 0, layoffs: 0, games: 0, acquisitions: 0, beats: 0,
+          billed: 0, calls: 0, hustled: 0, minRevenue: [], bestDay: 0 },
         pity: 0, pityL: 0, pityX: 0, tickets: 0,
         shots: 3, boost: { until: 0, mult: 1 },
-        games: { word: null, wordStreak: 0, wordLastWin: '', expenseAt: 0, memoryAt: 0 },
+        hustle: { v: 0, at: 0, last: t },
+        call: { at: t + 3 * MIN, from: pick(D.CLIENTS) },
+        games: { word: null, wordStreak: 0, wordLastWin: '', inboxAt: 0, stackAt: 0, best: {} },
         alumni: {},
         stock: null,
         settings: { stealth: false, badge: true, autopilot: true, installHint: true },
@@ -131,7 +134,11 @@
     }
 
     const difficulty = (tier, size) => B.diffBase * Math.pow(B.diffGrowth, tier - 1) * D.SIZES[size].diff;
-    const cashFor = (tier, size, stars) => B.cashBase * Math.pow(B.cashGrowth, tier - 1) * D.SIZES[size].reward * B.starMult[stars - 1] * cashMult();
+    // Revenue before company-wide multipliers (funding, phone booths, boosts…); cashFor adds them.
+    const baseCash = (tier, size, stars) => B.cashBase * Math.pow(B.cashGrowth, tier - 1) * D.SIZES[size].reward * B.starMult[stars - 1];
+    const cashFor = (tier, size, stars) => baseCash(tier, size, stars) * cashMult();
+    // What one project pays on top of that: length, rainmakers, VIP clients, Zara.
+    const projectMult = (offer, team) => Math.pow(offer.m || 1, 0.92) * (1 + 0.15 * team.filter(id => has(id, 'rain')).length) * (offer.vip ? 1.5 : 1) * (onTeam(team, 'midas') ? 2 : 1);
     const xpFor = (size, stars, tier = 1) => B.xpPerReward * D.SIZES[size].reward * B.starMult[stars - 1] * (1 + 0.1 * (tier - 1)) * (1 + 0.15 * lvl('library')) * (legendOwned('masterclass') ? 1.4 : 1);
     const repFor = (tier, size, stars) => stars * Math.pow(D.SIZES[size].reward, 0.85) * (1 + 0.12 * (tier - 1));
     // A typical Sprint payout at your current level; decisions are priced in these.
@@ -218,7 +225,9 @@
       const dur = offer.dur * Math.max(0.8, 1 - 0.08 * speed) * (onTeam(team, 'tireless') ? 0.75 : 1);
       // Ife sometimes hands over a finished project the moment it starts.
       const instant = !offer.tut && onTeam(team, 'warp') && rand() < 0.2;
-      S.ws[slot] = { offer, team, start: t, end: t + (instant ? 1 : dur * 1000), mean: f.mean, p4: f.p4, instant };
+      // bill: what the project bills while it runs (in baseCash units); billedBase/billed: how much so far.
+      const bill = baseCash(offer.tier, offer.size, B.billStars) * projectMult(offer, team);
+      S.ws[slot] = { offer, team, start: t, end: t + (instant ? 1 : dur * 1000), mean: f.mean, p4: f.p4, instant, bill, billedBase: 0, billed: 0 };
       S.offers = S.offers.filter(o => o !== offer);
       ensureOffers();
       if (S.tut === 0) advanceTut(1);
@@ -244,9 +253,11 @@
       const { offer, team } = w;
       const size = D.SIZES[offer.size];
       const stars = rollStars(w);
-      const rain = team.filter(id => has(id, 'rain')).length;
       const lenMult = Math.pow(offer.m || 1, 0.92);
-      const cash = cashFor(offer.tier, offer.size, stars) * lenMult * (1 + 0.15 * rain) * (offer.vip ? 1.5 : 1) * (onTeam(team, 'midas') ? 2 : 1);
+      bill(t);
+      // The project already billed part of its fee while it ran; the review decides the rest.
+      const billed = w.billed || 0;
+      const cash = Math.max(0, baseCash(offer.tier, offer.size, stars) * projectMult(offer, team) - (w.billedBase || 0)) * cashMult();
       earn(cash);
 
       const mentors = id => team.filter(x => x !== id && has(x, 'mentor')).length;
@@ -291,7 +302,7 @@
       S.ws[slot] = null;
       if (S.tut === 1 || S.tut === 2) advanceTut(3);
       else if (S.tut >= 0 && S.stats.deliveries >= 4) advanceTut(-1);
-      const res = { offer, team, stars, cash, xp: xpFor(offer.size, stars, offer.tier) * lenMult, levelups, career: S.career.lvl > careerBefore ? S.career.lvl : 0, items, refs, commitDone, passed, instant: !!w.instant };
+      const res = { offer, team, stars, cash, billed, total: cash + billed, xp: xpFor(offer.size, stars, offer.tier) * lenMult, levelups, career: S.career.lvl > careerBefore ? S.career.lvl : 0, items, refs, commitDone, passed, instant: !!w.instant };
       addLog(`${offer.client} · ${offer.name}: ${'★'.repeat(stars)}`, stars >= 4 ? 'good' : stars <= 2 ? 'bad' : '');
       checkAchievements();
       return res;
@@ -319,10 +330,19 @@
     }
 
     function earn(x) {
+      const t = now();
       S.cash += x;
       S.lifetime += x;
-      const dk = dayKey(now());
+      const dk = dayKey(t);
       S.stats.dayRevenue[dk] = (S.stats.dayRevenue[dk] || 0) + x;
+      S.stats.bestDay = Math.max(S.stats.bestDay, S.stats.dayRevenue[dk]);
+      // Revenue per minute for the last hour (plus a few minutes, so 5-minute buckets stay whole): [minute, amount] pairs.
+      const m = Math.floor(t / MIN), mr = S.stats.minRevenue, last = mr[mr.length - 1];
+      if (last && last[0] === m) last[1] += x;
+      else {
+        mr.push([m, x]);
+        while (mr[0][0] <= m - 65) mr.shift();
+      }
       while (S.funding + 1 < D.FUNDING.length && S.lifetime >= D.FUNDING[S.funding + 1].at) {
         S.funding++;
         const round = D.FUNDING[S.funding];
@@ -498,6 +518,102 @@
       S.boost = { until: (active ? S.boost.until : t) + minutes * MIN, mult: active ? Math.max(S.boost.mult, mult) : mult };
     }
 
+    // ---------------------------------------------------------------- live billing & hustle
+
+    // Running projects bill their client as the work progresses, so revenue ticks up all the time.
+    // Progress is read from start/end, so rushes and hustle bill the work they skip, too.
+    function bill(t = now()) {
+      for (const w of S.ws) {
+        if (!w || !w.bill) continue;
+        const due = w.bill * clamp((t - w.start) / Math.max(1, w.end - w.start), 0, 1) - w.billedBase;
+        if (due <= 0) continue;
+        const cash = due * cashMult();
+        w.billedBase += due;
+        w.billed += cash;
+        S.stats.billed += cash;
+        earn(cash);
+      }
+    }
+    // What running projects bill per second right now, with hustle and boosts.
+    function rate(t = now()) {
+      let r = 0;
+      for (const w of S.ws) if (w && w.bill && t < w.end) r += w.bill / ((w.end - w.start) / 1000);
+      return r * cashMult() * hustleMult(t);
+    }
+    // Revenue over the last 60 minutes.
+    const lastHour = (t = now()) => S.stats.minRevenue.reduce((a, [m, x]) => a + (m > Math.floor(t / MIN) - 60 ? x : 0), 0);
+
+    // Hustle: taps fill a meter that drains in a few seconds. While it is up, projects and office builds run
+    // up to hustleMax× faster. `at` is when the meter was last set to v; a flow state sets it in the future,
+    // which holds the meter full until then.
+    const hustleLevel = (t = now()) => (t <= S.hustle.at ? S.hustle.v : Math.max(0, S.hustle.v - B.hustleDrain * (t - S.hustle.at) / 1000));
+    const hustleMult = (t = now()) => 1 + (B.hustleMax - 1) * hustleLevel(t);
+    // Applies the extra work the meter has done since the last call.
+    function settleHustle(t) {
+      const h = S.hustle;
+      const from = h.last;
+      h.last = t;
+      if (t <= from || h.v <= 0) return;
+      let area = 0; // meter-seconds
+      if (h.at > from) area += h.v * (Math.min(t, h.at) - from) / 1000;
+      const d0 = Math.max(from, h.at);
+      if (t > d0) {
+        const u0 = hustleLevel(d0), d = (t - d0) / 1000, z = u0 / B.hustleDrain;
+        area += d >= z ? u0 * z / 2 : u0 * d - B.hustleDrain * d * d / 2;
+      }
+      if (area > 0) advance(area * (B.hustleMax - 1), t);
+    }
+    // Moves running projects and office builds along, as if `sec` more seconds had passed for them.
+    function advance(sec, t) {
+      let moved = false;
+      for (const x of S.ws.concat(S.builds)) {
+        if (!x || t >= x.end) continue;
+        const d = Math.min(sec * 1000, x.end - t);
+        x.start -= d;
+        x.end -= d;
+        moved = true;
+      }
+      if (moved) S.stats.hustled += sec;
+    }
+    function hustle(amount = B.hustleTap) {
+      const t = now();
+      if (!unlocked('hustle')) return 0;
+      settleHustle(t);
+      if (t < S.hustle.at) return 1; // in a flow state: already flat out
+      S.hustle.v = Math.min(1, hustleLevel(t) + amount);
+      S.hustle.at = t;
+      return S.hustle.v;
+    }
+    // Billing and hustle need to run more often than tick() for the counters to move smoothly.
+    function accrue(t = now()) {
+      settleHustle(t);
+      bill(t);
+    }
+
+    // ---------------------------------------------------------------- incoming calls
+
+    const callReady = (t = now()) => (S.tut === -1 && t >= S.call.at ? S.call : null);
+    const scheduleCall = t => { S.call = { at: t + (4 + rand() * 5) * MIN, from: pick(D.CLIENTS) }; };
+    const missCall = () => scheduleCall(now());
+    function answerCall() {
+      const t = now();
+      if (!callReady(t)) return null;
+      const busy = S.ws.some(w => w && t < w.end) || S.builds.length > 0;
+      const opts = [['quote', 45], ['shot', unlocked('rush') ? 20 : 0], ['flow', busy && unlocked('hustle') ? 20 : 0], ['boost', 10], ['ref', unlocked('hiring') ? 5 : 0]];
+      let roll = rand() * opts.reduce((a, o) => a + o[1], 0), kind = 'quote';
+      for (const [k, w] of opts) { roll -= w; if (roll < 0) { kind = k; break; } }
+      const res = { kind, from: S.call.from, text: pick(D.CALLS[kind]) };
+      if (kind === 'quote') { res.cash = refCash() * (1 + rand()); earn(res.cash); }
+      else if (kind === 'shot') S.shots = Math.min(shotCap() + 3, S.shots + 1);
+      else if (kind === 'flow') { settleHustle(t); S.hustle.v = 1; S.hustle.at = t + 20e3; res.sec = 20; }
+      else if (kind === 'boost') { addBoost(10, 1.5); res.minutes = 10; }
+      else addRefs(1, 'calls');
+      S.stats.calls++;
+      scheduleCall(t);
+      checkAchievements();
+      return res;
+    }
+
     // ---------------------------------------------------------------- breaks (mini-games)
 
     // SHA-256 (hex digest of an ASCII string). lintcheck.py picks its daily word from the same hash, so the
@@ -589,29 +705,32 @@
       if (!unlocked('breaks')) return [];
       const out = [];
       if (!wordState(t).done) out.push('word');
-      if (t >= gameReadyAt('expense')) out.push('expense');
-      if (t >= gameReadyAt('memory')) out.push('memory');
+      for (const k of ['inbox', 'stack']) if (t >= gameReadyAt(k)) out.push(k);
       return out;
     }
-    // expense: score = correct calls minus mistakes. memory: score = moves taken (8 is perfect).
+    // inbox: points scored. stack: floors built. Every round counts for your best score; the reward
+    // comes at most once per cooldown. tier = how many of the game's score thresholds you passed (0-3).
     function claimGame(kind, score) {
       const t = now();
-      if (!D.GAMES[kind] || !D.GAMES[kind].cooldown) return null;
-      if (t < gameReadyAt(kind)) return { cooldown: true };
-      S.games[kind + 'At'] = t + D.GAMES[kind].cooldown * MIN;
+      const g = D.GAMES[kind];
+      if (!g || !g.cooldown) return null;
+      const best = score > (S.games.best[kind] || 0);
+      if (best) S.games.best[kind] = score;
+      const tier = g.tiers.filter(x => score >= x).length;
+      if (t < gameReadyAt(kind)) { checkAchievements(); return { cooldown: true, best, tier }; }
+      S.games[kind + 'At'] = t + g.cooldown * MIN;
       S.stats.games++;
       let reward;
-      if (kind === 'expense') {
-        const shots = score >= 12 ? 3 : score >= 8 ? 2 : score >= 4 ? 1 : 0;
-        S.shots = Math.min(shotCap() + 3, S.shots + shots);
-        reward = { shots };
+      if (kind === 'inbox') {
+        S.shots = Math.min(shotCap() + 3, S.shots + tier);
+        reward = { shots: tier };
       } else {
-        const minutes = score <= 12 ? 30 : score <= 18 ? 20 : 10;
+        const minutes = [5, 10, 20, 30][tier];
         addBoost(minutes, 1.5);
         reward = { boost: minutes };
       }
       checkAchievements();
-      return reward;
+      return Object.assign(reward, { best, tier });
     }
 
     function coffeeChat(id) {
@@ -661,6 +780,7 @@
         const o = OFFICE[b.id];
         const lname = o.levels ? o.levels[lvl(b.id) - 1] : `level ${lvl(b.id)}`;
         addLog(`${o.name} upgraded (${lname})`, 'good');
+        if (b.id === 'pmo') message({ kind: 'dana', from: 'dana', text: 'The project office is open! Autopilot is on: when a delivery has waited five minutes, they sign it off and start the next project, even while you are away. You can switch it off on Home. 🤖' });
         emit('built', { id: b.id, lvl: lvl(b.id) });
       }
       checkAchievements();
@@ -1137,7 +1257,7 @@
     function checkUnlocks() {
       for (const u of D.UNLOCKS) {
         if (S.unlocked[u.id] || S.career.lvl < u.career) continue;
-        if (S.tut !== -1 && u.career > 1) continue;
+        if (S.tut !== -1) continue;
         S.unlocked[u.id] = true;
         if (u.id === 'hiring') addRefs(3, 'unlock');
         message({ kind: 'dana', from: 'dana', text: u.text, unlock: u.id });
@@ -1170,6 +1290,10 @@
     ach('letgo', 'Restructured', 'Let someone go', s => s.stats.layoffs >= 1);
     ach('rush50', 'Caffeinated', 'Rush 50 projects', s => s.stats.rushes >= 50);
     ach('word', 'Wordsmith', 'Solve the daily word', s => !!s.games.wordLastWin);
+    ach('inbox', 'Inbox Zero', `Score ${D.GAMES.inbox.tiers[2]} in Inbox Zero`, s => (s.games.best.inbox || 0) >= D.GAMES.inbox.tiers[2]);
+    ach('stack', 'Skyscraper', `Stack ${D.GAMES.stack.tiers[2]} floors`, s => (s.games.best.stack || 0) >= D.GAMES.stack.tiers[2]);
+    ach('calls', 'Hotline', 'Answer 25 calls', s => s.stats.calls >= 25);
+    ach('hustle', 'Crunch Time', 'Save an hour by hustling', s => s.stats.hustled >= 3600);
     ach('wordstreak', 'Lexicon', 'Solve the daily word five days running', s => s.games.wordStreak >= 5);
     ach('ipo', 'Ring the Bell', 'Take Atlas public', s => !!s.stock);
     ach('cap1t', 'Trillion-Dollar Club', 'Reach a $1T market cap', s => !!s.stock && s.stock.capIdx > 36);
@@ -1224,7 +1348,7 @@
           const res = signOff(i, true);
           if (!res) continue;
           total = total || { count: 0, stars: 0, cash: 0, levelups: 0 };
-          total.count++; total.stars += res.stars; total.cash += res.cash; total.levelups += res.levelups.length;
+          total.count++; total.stars += res.stars; total.cash += res.total; total.levelups += res.levelups.length;
           const at = Math.max(end, floor);
           const choice = S.offers
             .map(o => ({ o, team: recommend(o, at) }))
@@ -1249,6 +1373,7 @@
       const capped = Math.min(dt, B.offlineCapH * 3600);
       if (S.shots < shotCap()) S.shots = Math.min(shotCap(), S.shots + capped / (B.shotMinutes * 60));
       updatePeople(capped, t);
+      accrue(t);
       processBuilds(t);
       processRisks(t);
       expireMessages(t);
@@ -1293,7 +1418,7 @@
       if (unlocked('hiring') && S.tickets >= 1) return { text: 'A Legend is waiting: open the Headhunter box', action: 'hiring' };
       if (unlocked('hiring') && S.referrals >= 1) return { text: `Open a blind CV (${S.referrals} referral${S.referrals > 1 ? 's' : ''})`, action: 'hiring' };
       const games = gamesReady(t);
-      if (games.length) return { text: games[0] === 'word' ? "Take a 2-minute break: today's word" : `Take a 2-minute break: ${D.GAMES[games[0]].name.toLowerCase()}`, action: 'breaks' };
+      if (games.length) return { text: games[0] === 'word' ? "Take a break: today's word" : `Take a break: ${D.GAMES[games[0]].name}`, action: 'breaks' };
       if (S.stock && S.cash >= acqTarget().price) return { text: `Buy ${acqTarget().name}: revenue +15%`, action: 'investors' };
       const affordable = D.OFFICE.find(o => !buildBlock(o.id));
       if (affordable) return { text: `Upgrade the office: ${affordable.name}`, action: 'office' };
@@ -1320,12 +1445,13 @@
         const defaults = fresh();
         S = Object.assign(fresh(), saved);
         S.v = 3;
-        for (const k of ['stats', 'settings', 'games', 'boost']) S[k] = Object.assign(defaults[k], saved[k] || {});
+        for (const k of ['stats', 'settings', 'games', 'boost', 'hustle', 'call']) S[k] = Object.assign(defaults[k], saved[k] || {});
         for (const id of Object.keys(S.staff)) {
           if (PEOPLE[id]) S.staff[id] = Object.assign(person(now()), S.staff[id]);
           else delete S.staff[id];
         }
         while (S.ws.length < wsCount()) S.ws.push(null);
+        S.stats.bestDay = Math.max(S.stats.bestDay, ...Object.values(S.stats.dayRevenue));
         // Version 2 had funding rounds past the IPO; anyone that far along goes public now.
         if (S.funding >= D.FUNDING.length - 1) {
           S.funding = D.FUNDING.length - 1;
@@ -1366,6 +1492,7 @@
       skill, hearts, moodBaseline, gearPct, difficulty, cashFor, xpFor, refCash, maxTier, wsCount, onProject, resting, available,
       unlocked, sizeOpen, zoneOpen, crews, owned, workers, has, lvl, cashMult, fundingMult, boostMult, commitTargets, commitReward, commitName, weeklyExpectation,
       openPack, featured, rarityWeights, letGo, letGoBlock, severance, rush, shotCap, addBoost,
+      accrue, rate, lastHour, hustle, hustleLevel, hustleMult, callReady, answerCall, missCall,
       wordState, wordGuess, wordAnswer, scoreGuess, gamesReady, gameReadyAt, claimGame, sha256, isoDay,
       marketCap, capStep, capName, acqTarget, acquire, trailingRevenue, legendOwned,
       ACH, PEOPLE, OFFICE, LEGENDS, COMMIT_NAMES, xpNeed: B.xpNeed, repNeed: B.repNeed, addLog,
