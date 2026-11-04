@@ -58,7 +58,8 @@
   function who(id) {
     if (E.PEOPLE[id]) {
       const p = E.PEOPLE[id];
-      return { name: p.name, first: p.name.split(' ')[0], title: S.staff[id] ? jobTitle(id) : D.RARITY[p.r].name, look: p.look, role: p.role };
+      const sw = S.staff[id] && E.swagOf(id);
+      return { name: p.name, first: p.name.split(' ')[0], title: S.staff[id] ? jobTitle(id) : D.RARITY[p.r].name, look: sw ? Object.assign({}, p.look, { swag: sw.key }) : p.look, role: p.role };
     }
     if (D.CAST[id]) return { name: D.CAST[id].name, first: D.CAST[id].name.split(' ')[0], title: D.CAST[id].title, look: D.CAST[id].look };
     if (id && id.startsWith('rival:')) {
@@ -90,6 +91,16 @@
     return { cls: '', text: 'Available' };
   }
   const sizeLabel = o => `${D.SIZES[o.size].name} · ${fmtDur(o.dur)}`;
+  const pc = v => Math.round(v * 100) + '%';
+  const SWAG_FX = {
+    skill: v => `Skill +${pc(v)}`, night: v => `+${pc(v)} skill after 6pm`, early: v => `+${pc(v)} skill before 11am`, solo: v => `+${pc(v)} skill working alone`,
+    mood: v => `Mood +${v}`, rest: v => `Recovers ${pc(v)} faster`, xp: v => `XP +${pc(v)}`, bond: v => `Coffee chats build ${pc(v)} more bond`,
+    lucky: v => `${pc(v)} chance of an extra star`, rain: v => `Revenue +${pc(v)} on their projects`, speed: v => `Their projects finish ${pc(v)} sooner`,
+    social: v => `Teammates' mood +${v} after a delivery`,
+  };
+  const swagFxText = key => Object.entries(D.SWAG[key].fx).map(([k, v]) => SWAG_FX[k](v)).join(' · ');
+  const SWAG_TIER = ['Common', 'Uncommon', 'Rare', 'Epic', 'Legendary'];
+  const relEffect = s => { const r = D.RELS[s]; return `${r.work > 0 ? '+' : '−'}${pc(Math.abs(r.work))} when they work together · mood ${r.mood > 0 ? '+' : '−'}${Math.abs(r.mood)}`; };
   const abilityHtml = p => (p.ability ? `<div class="ability"><b>${icon('bolt')}${esc(p.ability.name)}</b><span>${esc(p.ability.desc)}</span></div>` : '');
   const pct = (v, digits = 1) => `${v >= 0 ? '▲' : '▼'} ${Math.abs(v * 100).toFixed(digits)}%`;
   const upDown = v => (v >= 0 ? 'gain' : 'loss');
@@ -139,6 +150,10 @@
     dots: '<g fill="currentColor" stroke="none"><circle cx="6" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="18" cy="12" r="2"/></g>',
     sleep: '<path d="M4 9h6l-6 7h6M14 5h6l-6 7h6"/>',
     plus: '<path d="M12 5v14M5 12h14"/>',
+    heart: '<path d="M12 20s-7.5-4.6-7.5-10A4.3 4.3 0 0 1 12 7.2 4.3 4.3 0 0 1 19.5 10c0 5.4-7.5 10-7.5 10z"/>',
+    bubbles: '<circle cx="8" cy="9" r="3.5"/><circle cx="16.5" cy="7.5" r="2.5"/><circle cx="14.5" cy="16" r="4"/><path d="M6.7 7.6a1.6 1.6 0 0 1 1.6-1.1"/>',
+    zen: '<path d="M3 18c3-2 6-2 9 0s6 2 9 0M3 13c3-2 6-2 9 0s6 2 9 0"/><ellipse cx="16.5" cy="7.5" rx="3.5" ry="2.2" fill="currentColor" stroke="none"/>',
+    shirt: '<path d="M8.5 4L4 7l2 3.5 2-1V20h8V9.5l2 1L20 7l-4.5-3c-.7 1.6-2 2.5-3.5 2.5S9.2 5.6 8.5 4z"/>',
     x: '<path d="M6 6l12 12M18 6L6 18"/>',
   };
   const icon = k => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON[k]}</svg>`;
@@ -164,7 +179,7 @@
     if (v === 'inbox') return pendingCount();
     if (v === 'projects') return E.ready().length;
     if (v === 'hiring') return Math.floor(S.referrals) + S.tickets;
-    if (v === 'breaks') return E.gamesReady().length;
+    if (v === 'breaks') return E.gamesReady().filter(k => !D.GAMES[k].calm).length; // calm games never nag
     return 0;
   }
   const isNew = v => GATE[v] && E.unlocked(GATE[v]) && !S.seen[v];
@@ -344,7 +359,8 @@
     }
     if (pending) return { p: desk || A.spot('coffee', idx), b: 'dots' };
     if (!desk || phase < 3) return { p: A.spot('coffee', idx), b: 'breaks' };
-    return { p: desk, b: st.mood < 35 ? 'cloud' : '' };
+    const smitten = phase % 3 === 0 && E.relsOf(id).some(r => r.s === 'dating' && S.staff[r.with]);
+    return { p: desk, b: st.mood < 35 ? 'cloud' : smitten ? 'heart' : '' };
   }
   const todOf = h => (h >= 20 || h < 6 ? 'night' : h < 8 ? 'dawn' : h >= 17 ? 'dusk' : 'day');
   function updateFloors() {
@@ -378,6 +394,9 @@
           clearTimeout(el.walkTimer);
           el.walkTimer = setTimeout(() => el.classList.remove('walk'), 1600);
         }
+        // New swag: draw the figure again.
+        const sw = (E.swagOf(id) || {}).key || '';
+        if (el.dataset.sw !== sw) { if (el.dataset.sw !== undefined) el.querySelector('.fp-fig').innerHTML = av(id); el.dataset.sw = sw; }
         el.dataset.pos = pos;
         el.style.left = p.x + '%';
         el.style.top = p.y + '%';
@@ -448,7 +467,7 @@
     }).join('');
     return `<div class="card"><div class="card-title">Breaks <span class="muted small">· quick games that pay out boosts</span><span class="spacer"></span>${boostHtml()}</div><div class="break-row">${items}</div></div>`;
   }
-  const GAME_ICON = { word: 'tiles', inbox: 'tray', stack: 'tower' };
+  const GAME_ICON = { word: 'tiles', inbox: 'tray', stack: 'tower', bubble: 'bubbles', zen: 'zen' };
 
   VIEWS.home = () => `
     <div class="page-head"><div><div class="muted small">${greeting()}</div><h1>Home</h1></div>${tickerChip()}${commitChip()}</div>
@@ -474,11 +493,17 @@
       <div class="offer-top"><span class="logo">${A.logo(o.client)}</span><div class="grow"><b>${esc(o.name)}</b><div class="muted small">${esc(o.client)}</div></div>
         ${o.vip ? '<span class="chip vip">VIP · pays 1.5×</span>' : o.stretch ? '<span class="chip stretch">Stretch</span>' : ''}</div>
       <div class="offer-facts"><span class="chip">${icon('clock')}${fmtDur(o.dur)}</span><span class="chip">${icon('team')}${D.SIZES[o.size].staff} · ${D.SIZES[o.size].name}</span>${o.needs.map(roleChip).join('')}</div>
-      ${team ? `<div class="forecast"><div class="fc-bar"><div style="width:${Math.round(f.p4 * 100)}%"></div></div><span>${Math.round(f.p4 * 100)}% chance of 4★+</span></div>
+      ${team ? `<div class="forecast"><div class="fc-bar"><div style="width:${Math.round(f.p4 * 100)}%"></div></div><span>${Math.round(f.p4 * 100)}% chance of 4★+</span>${chemistry(team)}</div>
         <div class="offer-foot">${stack(team, 'sm')}<span class="est">≈ ${money(estimate(o, f))}</span>
           <button class="btn primary" data-act="start" data-offer="${o.id}" data-coach="${coach}" ${free ? '' : 'disabled'}>${free ? 'Start' : 'No free slot'}</button></div>`
         : `<div class="muted small">Needs ${D.SIZES[o.size].staff} available ${D.SIZES[o.size].staff > 1 ? 'people' : 'person'}.</div>`}
     </div>`;
+  }
+  // How the people on a team get on: couples and friends lift a project, feuds and exes drag it down.
+  function chemistry(team) {
+    const m = E.pairMult(team);
+    if (Math.abs(m - 1) < 0.005) return '';
+    return `<span class="chip ${m > 1 ? 'chem' : 'friction'}" title="${m > 1 ? 'They get on' : 'They do not get on'}">${icon(m > 1 ? 'heart' : 'cloud')}${m > 1 ? '+' : '−'}${pc(Math.abs(m - 1))}</span>`;
   }
   VIEWS.projects = () => {
     const busy = S.ws.filter(Boolean).length;
@@ -509,14 +534,17 @@
     if (m.reactions && !m.done) body = `<div class="reacts">${['👍', '😂', '❤️'].map(e => `<button class="btn sm" data-act="react" data-msg="${m.id}" data-e="${e}">${e}</button>`).join('')}</div>`;
     else if (m.reactions && m.done && !mini) body = `<div class="reply muted small">You reacted ${m.done.reaction}</div>`;
     let cta = '';
+    if (m.kind === 'market' && pending && !mini) cta = `<div class="choices"><button class="btn ghost" data-act="nav" data-view="investors">${icon('investors')}See the clues</button></div>`;
     if (m.unlock && !mini) {
       const target = { hiring: 'hiring', league: 'league', commit: 'inbox', gear: 'team', breaks: 'breaks' }[m.unlock];
       if (target && target !== 'inbox') cta = `<div class="choices"><button class="btn" data-act="nav" data-view="${target}">Open ${LABEL[target]}</button></div>`;
     }
-    const cls = [pending ? 'pending' : '', m.read ? '' : 'unread', m.kind === 'outcome' ? (m.good ? 'outcome-good' : 'outcome-bad') : '', m.kind === 'funding' || m.kind === 'milestone' ? 'funding' : '', m.farewell ? 'farewell' : ''].join(' ');
+    const cls = [pending ? 'pending' : '', m.read ? '' : 'unread', m.kind === 'outcome' ? (m.good ? 'outcome-good' : 'outcome-bad') : '', m.kind === 'funding' || m.kind === 'milestone' ? 'funding' : '', m.farewell ? 'farewell' : '', m.kind === 'drama' ? 'drama' : '', m.kind === 'market' ? 'market' : ''].join(' ');
+    const cast = m.kind === 'drama' && m.cast ? [m.cast.a, m.cast.b].filter(id => S.staff[id]) : [];
+    const tag = m.kind === 'drama' ? `<span class="mtag drama">${cast.length ? stack(cast) : ''}Office drama</span>` : m.kind === 'market' ? `<span class="mtag market">${icon('investors')}Market rumour</span>` : '';
     const extra = m.kind === 'funding' ? `<div class="small good" style="margin-top:6px">+${money(m.amount)} funding · revenue ×1.5 for good · new office space</div>` : '';
     return `<div class="msg ${cls}">${av(m.from, 'sm')}<div class="grow"><div class="msg-head"><span class="msg-name">${esc(w.name)}</span><span class="muted small">${esc(w.title)} · ${ago(m.at)}</span></div>
-      <div class="msg-text">${esc(m.text)}</div>${extra}${body}${cta}</div></div>`;
+      ${tag}<div class="msg-text">${esc(m.text)}</div>${extra}${body}${cta}</div></div>`;
   }
   VIEWS.inbox = () => {
     const pend = S.inbox.filter(m => m.choices && !m.done);
@@ -538,11 +566,21 @@
       <div class="pc-row">${A.moodFace(st.mood)}<span>${moodWord(st.mood)}</span>${heartsHtml(id)}</div>
       <div class="pc-row"><span class="status-tag ${s.cls}">${esc(s.text)}</span></div></div></button>`;
   }
+  // Swag nobody wears yet, and who wears the rest. Tap an item to hand it to someone.
+  function drawerHtml() {
+    if (!E.unlocked('swag')) return '';
+    const items = S.swag.slice().sort((a, b) => D.SWAG[b.key].r - D.SWAG[a.key].r || a.id - b.id);
+    return `<div class="card"><div class="card-title">Swag drawer <span class="muted small">· ${items.length} item${items.length === 1 ? '' : 's'}</span><span class="spacer"></span><button class="btn sm ghost" data-act="nav" data-view="hiring">Get more</button></div>
+      ${items.length ? `<div class="swag-grid">${items.map(it => `<button class="swag-it" data-act="swagGive" data-item="${it.id}"><span class="swag-ico">${A.swagIcon(it.key)}</span><span class="grow"><b class="r${D.SWAG[it.key].r}">${esc(D.SWAG[it.key].name)}</b>
+        <span class="muted small">${esc(swagFxText(it.key))}</span><span class="small">${it.owner && S.staff[it.owner] ? `Worn by ${esc(who(it.owner).first)}` : '<span class="muted">In the drawer</span>'}</span></span></button>`).join('')}</div>`
+        : '<p class="muted small" style="margin:0">Empty for now. Swag boxes are on the Hiring page.</p>'}</div>`;
+  }
   VIEWS.team = () => {
     const ids = E.owned().sort((a, b) => E.skill(b) - E.skill(a));
     return `<div class="page-head"><div><div class="muted small">${ids.length} ${ids.length === 1 ? 'person' : 'people'} · tap someone to see their profile</div><h1>Team</h1></div>
       ${E.unlocked('hiring') ? `<div class="actions"><button class="btn primary" data-act="nav" data-view="hiring">Hire${S.referrals >= 1 ? ` (${Math.floor(S.referrals)})` : ''}</button></div>` : ''}</div>
       <div class="people">${ids.map(personCard).join('')}</div>
+      ${drawerHtml()}
       <p class="muted small">People level up by delivering projects. Happy, rested people with matching skills earn better reviews. Coffee chats build bonds, and bonds unlock their stories. Open someone's profile to let them go.</p>`;
   };
 
@@ -563,13 +601,22 @@
     const dir = D.PEOPLE.map(p => {
       const st = S.staff[p.id];
       const gone = !st && S.alumni[p.id];
-      return `<div class="dir-p ${st ? '' : 'no'} ${p.r === 5 ? 'legend' : ''}"><span class="av lg">${A.avatar(p.look, { mono: !st })}</span><b>${st || gone ? esc(p.name) : '???'}</b>${band(p.r)}<span class="muted">${st ? (st.stars ? starsHtml(st.stars) : 'Lvl ' + st.lvl) : gone ? 'Alumni' : esc(D.ROLES[p.role].name)}</span></div>`;
+      const guest = p.guest ? `<span class="gtag ${E.inPool(p.id) ? 'here' : ''}">${E.inPool(p.id) ? 'Guest · here this week' : 'Guest · back another week'}</span>` : '';
+      return `<div class="dir-p ${st ? '' : 'no'} ${p.r === 5 ? 'legend' : ''}"><span class="av lg">${A.avatar(who(p.id).look, { mono: !st })}</span><b>${st || gone ? esc(p.name) : '???'}</b>${band(p.r)}<span class="muted">${st ? (st.stars ? starsHtml(st.stars) : 'Lvl ' + st.lvl) : gone ? 'Alumni' : esc(D.ROLES[p.role].name)}</span>${guest}</div>`;
     }).join('');
+    const guests = E.guestsAt();
+    const guestCard = `<div class="card guests"><div class="card-title">This week's guests <span class="muted small">· in the pool until ${new Date(ws).toLocaleDateString(undefined, { weekday: 'long' })}</span></div>
+      <div class="guest-row">${guests.map(id => { const p = E.PEOPLE[id]; return `<div class="guest ${p.r === 5 ? 'legend' : ''}"><span class="av lg">${A.avatar(who(id).look)}</span><b>${esc(p.name)}</b>${band(p.r)}<span class="muted small">${S.staff[id] ? 'On your team' : esc(p.title || D.ROLES[p.role].name)}</span></div>`; }).join('')}</div>
+      <p class="muted small" style="margin:8px 0 0">Guests join the pool for a week, then make way for others. Once someone is on your team, they stay.</p></div>`;
+    const swagCan = S.cash >= E.swagCost();
+    const swagPack = E.unlocked('swag') ? `<div class="pack swag"><div class="pack-box">${A.box('swag')}</div><b>${esc(D.SWAG_BOX.name)}</b><span class="muted small">${esc(D.SWAG_BOX.desc)}</span>
+      <button class="btn ${swagCan ? 'primary' : ''}" data-act="swagBox" ${swagCan ? '' : 'disabled'} data-coach="pack-swag">Open · ${money(E.swagCost())}</button></div>` : '';
     return `<div class="page-head"><div><div class="muted small">${refs} referral${refs === 1 ? '' : 's'}${S.tickets ? ` · ${S.tickets} Headhunter ticket${S.tickets > 1 ? 's' : ''}` : ''} · you only find out who you hired when you open the box</div><h1>Hiring</h1></div></div>
       <div class="card featured"><div class="feat-art">${A.splash(fp.look, 5)}</div><div class="grow"><div class="muted small">Featured Legend · until ${new Date(ws).toLocaleDateString(undefined, { weekday: 'long' })}</div>
         <b class="fname">${esc(fp.name)}</b> <span class="muted small">${esc(fp.title)}</span>${band(5)}${abilityHtml(fp)}
         <div class="muted small">Half of all Legend hires this week are ${esc(fp.name.split(' ')[0])}.${S.staff[fid] ? ' Already on your team: another copy is a promotion.' : ''}</div></div></div>
-      <div class="packs">${pack('single')}${pack('fair')}${S.tickets ? pack('legend') : ''}</div>
+      <div class="packs">${pack('single')}${pack('fair')}${S.tickets ? pack('legend') : ''}${swagPack}</div>
+      ${guestCard}
       <div class="grid2">
         <div class="card"><div class="card-title">How it works</div><p class="small" style="margin-top:0">Every box holds one candidate. Someone new joins the team. Someone you already have gets <b>promoted</b> instead: each promotion star is +25% skill, up to five.</p>
           <p class="muted small">Referrals come from your daily commitment, the daily word, the weekly league, five-star reviews and the odd decision. Legends also come with the IPO and big market-cap milestones.</p></div>
@@ -587,13 +634,16 @@
       const on = ready.includes(k);
       let status;
       if (k === 'word') status = ws.done ? (ws.won ? `Solved in ${ws.guesses.length} ✓${S.games.wordStreak > 1 ? ` · ${S.games.wordStreak}-day streak` : ''}` : 'Not today. New word tomorrow.') : `${6 - ws.guesses.length} tries left`;
+      else if (g.calm) status = on ? 'Mood lift ready' : `Next mood lift in ${fmtDur((E.gameReadyAt(k) - now()) / 1000)} · play any time`;
       else status = (on ? 'Reward ready' : `Next reward in ${fmtDur((E.gameReadyAt(k) - now()) / 1000)} · play for fun meanwhile`) + (S.games.best[k] ? ` · best ${S.games.best[k]}` : '');
-      const btn = k === 'word' && ws.done ? 'See result' : on ? 'Play' : 'Practise';
+      const btn = k === 'word' && ws.done ? 'See result' : on || g.calm ? 'Play' : 'Practise';
       return `<div class="card game-card ${on ? 'on' : ''}"><div class="game-ico">${icon(GAME_ICON[k])}</div><div class="grow"><b>${esc(g.name)}</b><div class="small">${esc(g.desc)}</div>
         <div class="muted small">Reward: ${esc(g.reward)} · ${esc(status)}</div></div><button class="btn ${on ? 'primary' : ''}" data-act="game" data-g="${k}" data-coach="game-${k}">${btn}</button></div>`;
     };
     return `<div class="page-head"><div><div class="muted small">Wellbeing · quick brain breaks that pay out boosts</div><h1>Breaks</h1></div>${shotsHtml()}${boostHtml()}</div>
       ${card('word')}${card('inbox')}${card('stack')}
+      <div class="calm-head"><b>Calm</b><span class="muted small">No timer and nothing to lose. Finish one and the whole team relaxes.</span></div>
+      ${card('bubble')}${card('zen')}
       <p class="muted small">Espresso shots rush a running project. Revenue boosts stack: a new one adds time to the current one.</p>`;
   };
 
@@ -620,12 +670,27 @@
     const tg = E.acqTarget();
     const pts = chartPoints();
     const c = S.commit;
+    const fillT = s => s.replace(/\{T\}/g, st.ticker);
+    const srcTag = f => (f.src ? `<span class="src ${f.src}">${esc(D.SOURCES[f.src].name)}</span>` : f.rumour ? '<span class="src rumour">Rumour</span>' : '');
+    // The rumour in play, with the clues so far. Each clue says how far its source can be trusted.
+    const ev = S.market && S.market.ev;
+    let rumour = '';
+    if (ev) {
+      const tpl = D.MARKET.find(x => x.id === ev.id);
+      const clues = st.feed.filter(f => f.src && f.t >= ev.start);
+      const ask = S.inbox.find(m => m.kind === 'market' && m.tpl === ev.id && !m.done);
+      const state = ask ? '<button class="btn sm primary" data-act="nav" data-view="inbox">Make the call</button>' : ev.asked ? '<span class="muted small">Waiting for the truth…</span>' : '<span class="muted small">Morgan is reading the news…</span>';
+      rumour = `<div class="card rumour"><div class="card-title">${icon('investors')}Rumour in play<span class="spacer"></span>${state}</div><b>${esc(fillT(tpl.rumour))}</b>
+        <ul class="clues">${clues.map(f => `<li>${srcTag(f)}<span class="grow">${esc(f.text)}</span><span class="muted small nowrap">${esc(D.SOURCES[f.src].hint)}</span></li>`).join('') || '<li class="muted small">The first clues are on their way.</li>'}</ul>
+        <p class="muted small" style="margin:8px 0 0">${E.legendOwned('oracle') ? 'Warren already knows the answer: his read is in your inbox.' : 'Some sources are right more often than others. Weigh them up, then make the call.'}</p></div>`;
+    }
     const guidance = !c ? '' : c.tier === null
       ? `<button class="btn primary" data-act="nav" data-view="inbox">Set today's guidance</button>`
       : `<div class="small">Today's guidance: <b>${esc(E.commitName(c.tier))}</b> · ${Math.min(c.progress, c.target)}/${c.target} deliveries${c.paid ? ' · <span class="good">Beat ✓</span>' : ''}</div>`;
     return `<div class="page-head"><div><div class="muted small">Atlas Inc. · public since ${new Date(st.ipoAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</div><h1>Investors</h1></div></div>
+      ${rumour}
       <div class="card stock-card">
-        <div class="stock-head"><div><div class="muted small">${st.ticker} · share price</div><div class="hero-price">${price(st.price)}</div>
+        <div class="stock-head"><div><div class="muted small">${st.ticker} · share price${E.marketOpen(now()) ? ' · market open' : ' · after hours'}</div><div class="hero-price" data-price>${price(st.price)}</div>
           <div class="small"><span class="${upDown(day)}">${pct(day, 2)}</span> today · <span class="${upDown(since)}">${pct(since, 0)}</span> since IPO</div></div>
           <div class="stock-facts"><div><label>Market cap</label><b>${money(cap)}</b></div><div><label>All-time high</label><b>${price(st.ath)}</b></div><div><label>IPO price</label><b>${price(st.ipoPrice)}</b></div>${st.splits ? `<div><label>Splits</label><b>${st.splits}× 10-for-1</b></div>` : ''}</div></div>
         <div class="seg" role="tablist"><button class="${chartRange === '24h' ? 'on' : ''}" data-act="range" data-r="24h">24 hours</button><button class="${chartRange === '30d' ? 'on' : ''}" data-act="range" data-r="30d">30 days</button></div>
@@ -638,12 +703,12 @@
         <div class="card"><div class="card-title">Next milestone</div><div class="small"><b>${money(next)}</b> market cap${nextName ? ` · <b>${esc(nextName)}</b>` : ''}</div>
           <div class="bar" style="margin:8px 0"><div class="fill green" style="width:${clamp(100 * (Math.log(cap) - Math.log(prevStep || cap / 2)) / (Math.log(next) - Math.log(prevStep || cap / 2)), 2, 100)}%"></div></div>
           <p class="muted small" style="margin:0">Each milestone adds 5% revenue for good. Every power of ten also brings a Legend.</p></div>
-        <div class="card"><div class="card-title">Earnings</div><p class="small" style="margin-top:0">After the IPO every day is a quarter: your daily commitment is the guidance you give Wall Street. Beat it and ATLS pops; miss it and it drops.</p>${guidance}</div>
+        <div class="card"><div class="card-title">Earnings</div><p class="small" style="margin-top:0">After the IPO every day is a quarter: your daily commitment is the guidance you give Wall Street. Beat it and ${st.ticker} pops; miss it and it drops.</p>${guidance}</div>
       </div>
       <div class="card acq"><span class="logo lg">${A.logo(tg.name)}</span><div class="grow"><div class="muted small">Acquisition target · ${esc(tg.sector)} · ${esc(tg.city)}</div><b>${esc(tg.name)}</b>
         <div class="small">Revenue +15% for good${st.acq ? ` · you own ${st.acq} compan${st.acq === 1 ? 'y' : 'ies'} (+${Math.round(st.synergy * 100)}%)` : ''}</div></div>
         <button class="btn ${S.cash >= tg.price ? 'primary' : ''}" data-act="acquire" ${S.cash >= tg.price ? '' : 'disabled'}>Buy · ${money(tg.price)}</button></div>
-      <div class="card"><div class="card-title">News</div><ul class="feed news">${st.feed.map(f => `<li><span class="t">${ago(f.t)}</span><span class="grow">${esc(f.text)}</span>${f.pct ? `<span class="${upDown(f.pct)} nowrap">${pct(f.pct, 0)}</span>` : ''}</li>`).join('') || '<li class="muted">Quiet day on the market.</li>'}</ul></div>`;
+      <div class="card"><div class="card-title">News</div><ul class="feed news">${st.feed.map(f => `<li><span class="t">${ago(f.t)}</span><span class="grow">${srcTag(f)}${esc(f.text)}</span>${f.pct ? `<span class="${upDown(f.pct)} nowrap">${pct(f.pct, 0)}</span>` : ''}</li>`).join('') || '<li class="muted">Quiet day on the market.</li>'}</ul></div>`;
   };
 
   VIEWS.office = () => {
@@ -729,7 +794,7 @@
   VIEWS.settings = () => `
     <div class="page-head"><div><h1>Settings</h1></div></div>
     <div class="card">
-      <label class="field">Your name<input id="setName" maxlength="20" value="${esc(S.name)}" placeholder="Your name" autocomplete="off"></label>
+      <label class="field">Your name<input id="setName" maxlength="20" value="${esc(S.name)}" placeholder="Your name" autocomplete="off"><span class="muted small">After the IPO your shares trade as <b data-tick>${esc(E.tickerFor(S.name))}</b>, from your name.</span></label>
       <div class="row"><span class="toggle ${S.settings.stealth ? 'on' : ''}" data-act="setting" data-key="stealth"><span class="sw"></span>Stealth mode (no animations or colour flourishes)</span></div>
       <div class="row"><span class="toggle ${S.settings.badge ? 'on' : ''}" data-act="setting" data-key="badge"><span class="sw"></span>Show a task count in the tab title and on the app icon</span></div>
       ${E.lvl('pmo') ? `<div class="row"><span class="toggle ${S.settings.autopilot ? 'on' : ''}" data-act="setting" data-key="autopilot"><span class="sw"></span>Autopilot: sign off and restart projects for me</span></div>` : ''}
@@ -816,6 +881,7 @@
     if (t - lastSlow < 250) return;
     lastSlow = t;
     $('#cashChip').textContent = money(S.cash);
+    if (S.stock) { $('#tickChip').innerHTML = tickerChip(); for (const el of $$('[data-price]')) el.textContent = price(S.stock.price); }
     for (const el of $$('[data-rate]')) el.textContent = rateText(E.rate(t));
     for (const el of $$('[data-today]')) el.textContent = money(S.stats.dayRevenue[E.dayKey(t)] || 0);
     for (const el of $$('[data-hour]')) el.textContent = money(E.lastHour(t));
@@ -891,6 +957,8 @@
   function closeDialog() {
     stopInbox();
     stopStack();
+    stopZen();
+    bw = null;
     $('#overlay').classList.add('hidden');
     reveal = null;
     if (dialogQueue.length) { const [h, o] = dialogQueue.shift(); openDialog(h, o); return; }
@@ -1062,6 +1130,44 @@
     }, rare ? 1300 : b.r === 3 ? 700 : 450);
   }
 
+  // --- swag: the box, then who wears it
+  let swagNew = null;
+  function showSwagBox(item) {
+    const sw = D.SWAG[item.key];
+    swagNew = item.id;
+    openDialog(`<h3>${esc(D.SWAG_BOX.name)}</h3><div class="muted small">Tap the box to open it.</div>
+      <div class="boxes n1"><button class="bbox r${sw.r}" data-act="swagOpen" aria-label="Open the box"><span class="bbox-box">${A.box('swag')}</span>
+        <span class="bbox-card r${sw.r}"><span class="swag-ico big">${A.swagIcon(item.key)}</span><b>${esc(sw.name)}</b><span class="band r${sw.r}">${SWAG_TIER[sw.r]}</span>
+          <span class="small">${esc(swagFxText(item.key))}</span><span class="muted small">${esc(sw.line)}</span></span></button></div>
+      <div class="actions" id="swagAct"><button class="btn primary" data-act="swagOpen">Open</button></div>`, { cls: 'swag-dialog' });
+    if (S.settings.stealth) ACTIONS.swagOpen();
+  }
+  function swagOpened() {
+    const el = $('#swagAct');
+    if (el) el.innerHTML = `<button class="btn" data-act="closeDialog">Keep it in the drawer</button><button class="btn primary" data-act="swagGive" data-item="${swagNew}">Give it to someone</button>`;
+  }
+  // Pick who wears an item. Each row shows that person already wearing it.
+  function showGive(itemId) {
+    const it = S.swag.find(i => i.id === itemId);
+    if (!it) return;
+    const sw = D.SWAG[it.key];
+    const ids = E.owned().sort((a, b) => E.skill(b) - E.skill(a));
+    openDialog(`<button class="dlg-x" data-act="closeDialog" aria-label="Close">×</button><h3>Who gets the ${esc(sw.name.toLowerCase())}?</h3>
+      <div class="muted small">${esc(swagFxText(it.key))}. Whatever they wear now goes back in the drawer.</div>
+      <div class="pick-list">${ids.map(id => { const cur = E.swagOf(id); return `<button class="pick" data-act="swagEquip" data-item="${it.id}" data-id="${id}"><span class="av sm">${A.avatar(Object.assign({}, E.PEOPLE[id].look, { swag: it.key }))}</span>
+        <span class="grow"><b>${esc(who(id).name)}</b><span class="muted small">${cur ? 'Wears the ' + esc(D.SWAG[cur.key].name.toLowerCase()) : 'Wears nothing yet'}</span></span>${it.owner === id ? '<span class="chip">Wearing it</span>' : ''}</button>`; }).join('')}</div>
+      ${it.owner ? `<div class="actions"><button class="btn" data-act="swagEquip" data-item="${it.id}" data-id="">Put it back in the drawer</button></div>` : ''}`, { cls: 'pick-dialog' });
+  }
+  // Pick what someone wears, from their profile.
+  function showWear(id) {
+    const p = E.PEOPLE[id], cur = E.swagOf(id);
+    const items = S.swag.slice().sort((a, b) => D.SWAG[b.key].r - D.SWAG[a.key].r || a.id - b.id);
+    openDialog(`<button class="dlg-x" data-act="profile" data-id="${id}" aria-label="Back">×</button><h3>What should ${esc(p.name.split(' ')[0])} wear?</h3>
+      <div class="pick-list">${items.map(it => `<button class="pick" data-act="swagEquip" data-item="${it.id}" data-id="${id}" data-back="1"><span class="av sm">${A.avatar(Object.assign({}, p.look, { swag: it.key }))}</span>
+        <span class="grow"><b class="r${D.SWAG[it.key].r}">${esc(D.SWAG[it.key].name)}</b><span class="muted small">${esc(swagFxText(it.key))}${it.owner && it.owner !== id && S.staff[it.owner] ? ` · worn by ${esc(who(it.owner).first)}` : ''}</span></span>${it.owner === id ? '<span class="chip">Wearing it</span>' : ''}</button>`).join('')}</div>
+      <div class="actions">${cur ? `<button class="btn" data-act="swagEquip" data-item="${cur.id}" data-id="" data-back="${id}">Take it off</button>` : ''}<button class="btn" data-act="profile" data-id="${id}">Back</button></div>`, { cls: 'pick-dialog' });
+  }
+
   // --- the reveal for rare hires: splash art, name, ability. Several queue up behind each other.
   const splashQueue = [];
   let splashAt = 0;
@@ -1110,14 +1216,14 @@
   // --- IPO and market-cap milestones
   function showIPO(data) {
     openDialog(`<div class="ipo"><div class="ipo-bell" id="bell">${icon('bell')}</div><div class="muted small">Opening bell</div><h3>Atlas is a public company!</h3>
-      <div class="ticker big static"><b>ATLS</b> ${price(data.price)} <span class="gain">▲ 15.0%</span></div>
-      <p>From today every day is a fiscal quarter. Your daily commitment becomes the guidance you give Wall Street: beat it and ATLS pops, miss it and it drops. Keep growing and the market cap climbs. Forever.</p>
+      <div class="ticker big static"><b>${esc(E.ticker())}</b> ${price(data.price)} <span class="gain">▲ 15.0%</span></div>
+      <p>Your shares trade as <b>${esc(E.ticker())}</b>, after your name. From today every day is a fiscal quarter. Your daily commitment becomes the guidance you give Wall Street: beat it and ${esc(E.ticker())} pops, miss it and it drops. Watch the news, too: rumours will need your call. Keep growing and the market cap climbs. Forever.</p>
       <div class="extras"><div class="extra gold">${icon('gift')}<span>A <b>Legend</b> wants to join: open the Headhunter box in Hiring</span></div><div class="extra">${icon('investors')}<span><b>Investors</b> is open: share price, milestones and companies to buy</span></div></div>
       <div class="actions"><button class="btn" data-act="ringBell">Ring the bell</button><button class="btn primary" data-act="nav" data-view="investors">See the stock</button></div></div>`, { cls: 'ipo-dialog', queue: true });
   }
   function showCap(data) {
     openDialog(`<div class="profile-head">${av('ceo', 'xl')}<div><div class="muted small">Alex Rivera · CEO</div><h3>${esc(data.name || money(data.cap) + ' company')}!</h3></div></div>
-      <p>ATLS just passed a <b>${money(data.cap)}</b> market cap.</p>
+      <p>${esc(E.ticker())} just passed a <b>${money(data.cap)}</b> market cap.</p>
       <div class="extras"><div class="extra gold">${icon('investors')}<span>Brand value: revenue <b>+5%</b> for good</span></div><div class="extra gold">${icon('gift')}<span>A headhunter found another <b>Legend</b>. Open the box in Hiring.</span></div></div>
       <div class="actions"><button class="btn primary" data-act="closeDialog">Ring it in</button></div>`, { queue: true });
   }
@@ -1496,6 +1602,230 @@
     }
   }
 
+  // --- breaks: the calm games. No timer and no score to beat. Finishing one lifts the whole team's mood.
+  const calmNote = kind => {
+    const wait = E.gameReadyAt(kind) - now();
+    return wait > 0 ? ` The next mood lift is in ${fmtDur(wait / 1000)}, but you can play any time.` : '';
+  };
+  function calmEnd(kind, res, line) {
+    const reward = res && !res.cooldown && !res.short
+      ? `<div class="extra gold">${icon('heart')}<span>Team mood <b>+${res.mood}</b> for everyone${kind === 'zen' ? ', and a little rest' : ''}</span></div>`
+      : `<div class="muted small">The team already had a calm break. The next mood lift is in ${fmtDur((E.gameReadyAt(kind) - now()) / 1000)}.</div>`;
+    return `<div class="game-end calm"><div class="grow"><b>${esc(line)}</b>${reward}</div></div>`;
+  }
+
+  // Bubble wrap: pop with a tap, or drag across the sheet to pop a row.
+  const BW_N = 48, BW_POPS = ['pop', 'pip', 'plip', 'snap', 'blip', 'ahh'];
+  let bw = null;
+  function showBubble() {
+    openDialog(`<button class="dlg-x" data-act="closeDialog" aria-label="Close">×</button><h3>Bubble wrap</h3>
+      <div class="muted small game-intro">Tap a bubble to pop it, or drag across the sheet. There is no timer. Pop the whole sheet and the team feels a little better.${calmNote('bubble')}</div>
+      <div class="bw-sheet" id="bwSheet"></div>
+      <div class="calm-foot"><span class="muted small" id="bwCount"></span><span class="spacer"></span><button class="btn" id="bwBtn" data-act="bwFresh">Fresh sheet</button></div>
+      <div id="bwEnd"></div>`, { cls: 'game-dialog calm-game bw-game' });
+    const sheet = $('#bwSheet');
+    // Touch keeps sending moves to the bubble the finger started on, so find the bubble under the finger.
+    const under = e => { const el = document.elementFromPoint(e.clientX, e.clientY); return el && el.closest('.bw'); };
+    sheet.addEventListener('pointerdown', e => { if (e.button > 0 || !bw) return; e.preventDefault(); bw.down = true; bwPop(under(e)); });
+    sheet.addEventListener('pointermove', e => { if (bw && bw.down) bwPop(under(e)); });
+    for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) sheet.addEventListener(ev, () => { if (bw) bw.down = false; });
+    bwFresh();
+  }
+  function bwFresh() {
+    const sheet = $('#bwSheet');
+    if (!sheet) return;
+    bw = { popped: 0, down: false };
+    sheet.innerHTML = Array.from({ length: BW_N }, (_, i) => `<button class="bw" data-act="bw" aria-label="Bubble ${i + 1}"></button>`).join('');
+    sheet.classList.remove('fresh');
+    void sheet.offsetWidth;
+    sheet.classList.add('fresh');
+    $('#bwEnd').innerHTML = '';
+    $('#bwBtn').classList.remove('primary');
+    bwCount();
+  }
+  function bwCount() { $('#bwCount').textContent = bw.popped === BW_N ? 'Sheet finished' : `${bw.popped} of ${BW_N} popped`; }
+  function bwPop(el) {
+    if (!bw || !el || el.classList.contains('popped')) return;
+    el.classList.add('popped');
+    el.setAttribute('aria-label', 'Popped');
+    bw.popped++;
+    buzz(4);
+    if (Math.random() < 0.2 && !S.settings.stealth) {
+      const f = document.createElement('span');
+      f.className = 'bw-float';
+      f.textContent = pick(BW_POPS);
+      el.appendChild(f);
+      setTimeout(() => f.remove(), 700);
+    }
+    bwCount();
+    if (bw.popped < BW_N) return;
+    const res = E.claimGame('bubble', BW_N);
+    save();
+    $('#bwEnd').innerHTML = calmEnd('bubble', res, pick(['Every last one. Lovely.', 'Not a single bubble left. Very satisfying.', 'The sheet is flat. So are your shoulders.']));
+    $('#bwBtn').classList.add('primary');
+    renderNav();
+  }
+
+  // Zen garden: drag to rake the sand, tap to place a stone, tap a stone to lift it.
+  // The sand lives on its own canvas, so grooves stay put; stones are drawn over it each time.
+  let zen = null;
+  const ZEN_TINES = [-9, -3, 3, 9], ZEN_STROKE = 60;
+  function showZen() {
+    stopZen();
+    openDialog(`<button class="dlg-x" data-act="closeDialog" aria-label="Close">×</button><h3>Zen garden</h3>
+      <div class="muted small game-intro">Drag to rake the sand. Tap to place a stone, and tap a stone to lift it. ${D.GAMES.zen.goal} long strokes and the team breathes out.${calmNote('zen')}</div>
+      <div class="zen-wrap" id="zenWrap"><canvas id="zenCanvas" tabindex="0" role="img" aria-label="Zen garden. Drag to rake, tap to place a stone. With the keyboard, press space to rake a line."></canvas></div>
+      <div class="calm-foot"><span class="muted small" id="zenCount"></span><span class="spacer"></span><button class="btn" data-act="zenSmooth">Smooth the sand</button></div>
+      <div id="zenEnd"></div>`, { cls: 'game-dialog calm-game zen-game' });
+    const cv = $('#zenCanvas');
+    const w = $('#zenWrap').clientWidth, h = Math.round(Math.min(w * 0.72, window.innerHeight * 0.5));
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    cv.width = w * dpr;
+    cv.height = h * dpr;
+    cv.style.height = h + 'px';
+    const sand = document.createElement('canvas');
+    sand.width = cv.width;
+    sand.height = cv.height;
+    const sctx = sand.getContext('2d');
+    sctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    zen = { cv, ctx: cv.getContext('2d'), sand, sctx, w, h, dpr, stones: [], ripples: [], strokes: 0, sweeps: 0, done: false, drag: null, over: false, raf: 0 };
+    const z = zen;
+    const pos = e => { const r = cv.getBoundingClientRect(); return [(e.clientX - r.left) * z.w / r.width, (e.clientY - r.top) * z.h / r.height]; };
+    cv.addEventListener('pointerdown', e => {
+      if (e.button > 0 || z.over) return;
+      e.preventDefault();
+      cv.setPointerCapture(e.pointerId);
+      const [x, y] = pos(e);
+      z.drag = { x, y, x0: x, y0: y, len: 0, nx: 0, ny: 0, tines: [], moved: false, counted: false };
+    });
+    cv.addEventListener('pointermove', e => { if (z.drag) zenRake(z, ...pos(e)); });
+    cv.addEventListener('pointerup', () => { const d = z.drag; z.drag = null; if (d && !d.moved) zenTap(z, d.x0, d.y0); });
+    cv.addEventListener('pointercancel', () => { z.drag = null; });
+    zenSmooth();
+  }
+  function stopZen() { if (zen) { zen.over = true; cancelAnimationFrame(zen.raf); } zen = null; }
+  function zenSmooth() {
+    const z = zen;
+    if (!z) return;
+    const c = z.sctx;
+    c.fillStyle = '#eadfc8';
+    c.fillRect(0, 0, z.w, z.h);
+    for (let i = 0; i < z.w * z.h / 30; i++) {
+      c.fillStyle = Math.random() < 0.5 ? 'rgba(150, 120, 80, .2)' : 'rgba(255, 255, 255, .45)';
+      c.fillRect(Math.random() * z.w, Math.random() * z.h, 1.3, 1.3);
+    }
+    for (const s of z.stones) zenRings(z, s);
+    zenCount(z);
+    zenDraw(z);
+  }
+  function zenCount(z) {
+    const goal = D.GAMES.zen.goal;
+    $('#zenCount').textContent = z.strokes >= goal ? `${z.strokes} strokes. Keep raking as long as you like.` : `${z.strokes} of ${goal} strokes`;
+  }
+  // One groove: a dark line with a pale edge, like light on a ridge of sand. Solid colours, so joins do not darken.
+  function zenGroove(c, x0, y0, x1, y1) {
+    c.lineCap = 'round';
+    c.strokeStyle = '#d3c19f';
+    c.lineWidth = 2.6;
+    c.beginPath(); c.moveTo(x0, y0); c.lineTo(x1, y1); c.stroke();
+    c.strokeStyle = '#f7f0e1';
+    c.lineWidth = 1;
+    c.beginPath(); c.moveTo(x0 + 1, y0 + 1.2); c.lineTo(x1 + 1, y1 + 1.2); c.stroke();
+  }
+  function zenRake(z, x, y) {
+    const d = z.drag;
+    if (!d.moved) {
+      if (Math.hypot(x - d.x0, y - d.y0) < 6) return; // still a tap
+      d.moved = true;
+    }
+    const dx = x - d.x, dy = y - d.y, len = Math.hypot(dx, dy);
+    if (len < 2) return;
+    // The rake turns with the stroke. Easing its angle, and never letting it flip, keeps the tines from crossing.
+    let nx = -dy / len, ny = dx / len;
+    if (d.len && nx * d.nx + ny * d.ny < 0) { nx = -nx; ny = -ny; }
+    if (d.len) { nx = d.nx * 0.75 + nx * 0.25; ny = d.ny * 0.75 + ny * 0.25; }
+    const n = Math.hypot(nx, ny) || 1;
+    d.nx = nx / n;
+    d.ny = ny / n;
+    ZEN_TINES.forEach((o, i) => {
+      const px = x + d.nx * o, py = y + d.ny * o;
+      const [lx, ly] = d.tines[i] || [d.x + d.nx * o, d.y + d.ny * o];
+      zenGroove(z.sctx, lx, ly, px, py);
+      d.tines[i] = [px, py];
+    });
+    d.x = x;
+    d.y = y;
+    d.len += len;
+    if (!d.counted && d.len >= ZEN_STROKE) {
+      d.counted = true;
+      z.strokes++;
+      zenCount(z);
+      if (z.strokes >= D.GAMES.zen.goal && !z.done) zenDone(z);
+    }
+    zenDraw(z);
+  }
+  // Keyboard: the rake makes one gentle, wavy line across the garden, a little lower each time.
+  function zenSweep(z) {
+    const y = 18 + (z.sweeps++ * 24) % Math.max(24, z.h - 36);
+    z.drag = { x: 4, y, x0: 4, y0: y, len: 0, nx: 0, ny: 0, tines: [], moved: true, counted: false };
+    for (let x = 10; x <= z.w - 4; x += 6) zenRake(z, x, y + Math.sin(x / 38) * 6);
+    z.drag = null;
+  }
+  function zenTap(z, x, y) {
+    const hit = z.stones.findIndex(s => Math.hypot(s.x - x, s.y - y) < s.r + 4);
+    if (hit >= 0) z.stones.splice(hit, 1); // the ripples stay in the sand
+    else {
+      const s = { x, y, r: 10 + Math.random() * 8, sq: 0.72 + Math.random() * 0.2, rot: Math.random() * Math.PI, tone: pick(['#7b8085', '#6a6f75', '#8d877d', '#77706a']) };
+      z.stones.push(s);
+      zenRings(z, s);
+      z.ripples.push({ s, t: performance.now() });
+    }
+    buzz(6);
+    zenDraw(z);
+  }
+  function zenRings(z, s) {
+    const c = z.sctx;
+    for (const gap of [7, 14, 21]) {
+      c.lineWidth = 2.6;
+      c.strokeStyle = '#d3c19f';
+      c.beginPath(); c.ellipse(s.x, s.y, s.r + gap, (s.r + gap) * (0.5 + s.sq / 2), s.rot, 0, Math.PI * 2); c.stroke();
+      c.lineWidth = 1;
+      c.strokeStyle = '#f7f0e1';
+      c.beginPath(); c.ellipse(s.x + 1, s.y + 1.2, s.r + gap, (s.r + gap) * (0.5 + s.sq / 2), s.rot, 0, Math.PI * 2); c.stroke();
+    }
+  }
+  function zenDraw(z) {
+    if (z.over) return;
+    const c = z.ctx, t = performance.now();
+    c.setTransform(1, 0, 0, 1, 0, 0);
+    c.drawImage(z.sand, 0, 0);
+    c.setTransform(z.dpr, 0, 0, z.dpr, 0, 0);
+    z.ripples = z.ripples.filter(r => t - r.t < 800);
+    for (const r of z.ripples) {
+      const k = (t - r.t) / 800;
+      c.strokeStyle = `rgba(255, 255, 255, ${0.7 * (1 - k)})`;
+      c.lineWidth = 2;
+      c.beginPath(); c.arc(r.s.x, r.s.y, r.s.r + 4 + 30 * k, 0, Math.PI * 2); c.stroke();
+    }
+    for (const s of z.stones) {
+      c.fillStyle = 'rgba(70, 50, 25, .25)';
+      c.beginPath(); c.ellipse(s.x + 2, s.y + 3, s.r, s.r * s.sq, s.rot, 0, Math.PI * 2); c.fill();
+      const gr = c.createRadialGradient(s.x - s.r * 0.35, s.y - s.r * 0.4, 1, s.x, s.y, s.r * 1.1);
+      gr.addColorStop(0, '#c3c6ca');
+      gr.addColorStop(1, s.tone);
+      c.fillStyle = gr;
+      c.beginPath(); c.ellipse(s.x, s.y, s.r, s.r * s.sq, s.rot, 0, Math.PI * 2); c.fill();
+    }
+    if (z.ripples.length && !z.raf) z.raf = requestAnimationFrame(() => { z.raf = 0; zenDraw(z); });
+  }
+  function zenDone(z) {
+    z.done = true;
+    const res = E.claimGame('zen', z.strokes);
+    save();
+    $('#zenEnd').innerHTML = calmEnd('zen', res, pick(['The sand is raked. The mind is quiet. The Slack is not, but still.', 'Beautiful. Somewhere, a monk nods.', 'Very calm. Very zen. Very slightly sandy.']));
+    renderNav();
+  }
+
   // --- price chart hover (crosshair + tooltip), also driven by the arrow keys
   let chartActive = false;
   function chartHover(plot, clientX, idx) {
@@ -1525,9 +1855,16 @@
   function chartHide(plot) { for (const el of plot.querySelectorAll('.ch-cross,.ch-hdot,.ch-tip')) el.classList.add('hidden'); }
 
   // --- profile
+  function swagRow(id) {
+    const it = E.swagOf(id);
+    const btn = S.swag.length ? `<button class="btn sm" data-act="swagWear" data-id="${id}">${it ? 'Change' : 'Choose'}</button>` : '';
+    return `<div class="swag-row">${it ? `<span class="swag-ico">${A.swagIcon(it.key)}</span><span class="grow"><b class="r${D.SWAG[it.key].r}">${esc(D.SWAG[it.key].name)}</b><span class="muted small">${esc(swagFxText(it.key))}</span></span>`
+      : `<span class="grow muted small">${S.swag.length ? 'Not wearing anything from the drawer.' : 'Nothing yet. Swag boxes are on the Hiring page.'}</span>`}${btn}</div>`;
+  }
   function showProfile(id, chat) {
     const p = E.PEOPLE[id], st = S.staff[id];
     if (!p || !st) return;
+    const rels = E.relsOf(id).filter(r => S.staff[r.with]);
     const h = E.hearts(id);
     const s = statusOf(id);
     const chatReady = now() - st.lastChat >= 4 * 3600e3;
@@ -1555,6 +1892,8 @@
         <div class="stat"><label>Avg rating</label><b>${st.delivered ? (st.starSum / st.delivered).toFixed(1) + '★' : '–'}</b></div>
       </div>
       ${p.traits.length ? `<div class="traits">${p.traits.map(t => `<div class="trait"><b>${esc(D.TRAITS[t].name)}</b>${esc(D.TRAITS[t].desc)}</div>`).join('')}</div>` : ''}
+      ${E.unlocked('swag') ? `<div class="card-title" style="margin:12px 0 0">Swag</div>${swagRow(id)}` : ''}
+      ${rels.length ? `<div class="card-title" style="margin:12px 0 0">Office life</div><div class="rels">${rels.map(r => `<div class="rel ${r.s}">${av(r.with, 'sm')}<span class="grow"><b>${esc(D.RELS[r.s].name)} ${esc(who(r.with).first)}</b><span class="muted small">${relEffect(r.s)}</span></span></div>`).join('')}</div>` : ''}
       ${E.unlocked('gear') ? `<div class="card-title" style="margin:12px 0 0">Equipment</div><div class="gear-row">${gear}</div>` : ''}
       <div class="card-title" style="margin:12px 0 0">Their story</div><ul class="story">${story}</ul>
       <div class="actions"><button class="btn ghost danger letgo" data-act="letgo" data-id="${id}">Let go…</button><button class="btn" data-act="closeDialog">Close</button><button class="btn primary" data-act="chat" data-id="${id}" ${chatReady ? '' : 'disabled'}>${icon('breaks')}${chatReady ? 'Coffee chat' : `Again in ${fmtDur((st.lastChat + 4 * 3600e3 - now()) / 1000)}`}</button></div>`);
@@ -1578,6 +1917,7 @@
     ['commit', [['commit', 'Pick a daily target for bonus referrals']]],
     ['breaks', [['break-word', 'Quick games that pay out boosts'], ['nav-breaks', 'New: Breaks'], ['sheet-breaks', 'New: Breaks']]],
     ['league', [['nav-league', 'New: a weekly league'], ['sheet-league', 'New: a weekly league']]],
+    ['swag', [['pack-swag', 'New: a swag box. Dress up the team'], ['nav-hiring', 'New: swag in Hiring'], ['tab-more', 'New: swag is in Hiring'], ['sheet-hiring', 'Hiring']]],
   ];
   let coachEl = null, coachTipId = null, coachFinal = false, coachKeys = [];
   function hideCoach() { coachEl = null; $('#coach').classList.add('hidden'); $('#coachTip').classList.add('hidden'); }
@@ -1662,7 +2002,7 @@
       else if (type === 'ipo') showIPO(data);
       else if (type === 'marketcap') {
         if (data.legend) showCap(data);
-        else toast(`ATLS passed a ${money(data.cap)} market cap`);
+        else toast(`${E.ticker()} passed a ${money(data.cap)} market cap`);
       } else if (type === 'funding' && data.round < D.FUNDING.length - 1) {
         const r = D.FUNDING[data.round];
         const zones = Object.values(D.ZONES).filter(z => z.funding === data.round).map(z => z.name);
@@ -1825,6 +2165,31 @@
       renderNav();
     },
     openBox: d => openBox(+d.i),
+    swagBox: () => {
+      const it = E.openSwag();
+      if (!it || it.error) return toast('Not enough budget for a swag box');
+      save();
+      showSwagBox(it);
+      renderNav();
+    },
+    swagOpen: () => {
+      const el = $('#dialog .bbox');
+      if (!el || el.classList.contains('open') || el.classList.contains('shake')) return;
+      if (S.settings.stealth) { el.classList.add('open'); swagOpened(); return; }
+      el.classList.add('shake');
+      setTimeout(() => { el.classList.add('open'); swagOpened(); buzz(12); }, 450);
+    },
+    swagGive: d => showGive(+d.item),
+    swagWear: d => showWear(d.id),
+    swagEquip: d => {
+      const it = S.swag.find(i => i.id === +d.item);
+      if (!it || !E.equipSwag(it.id, d.id || null)) return;
+      save();
+      const sw = D.SWAG[it.key];
+      toast(d.id ? `${who(d.id).first} is wearing the ${sw.name.toLowerCase()}` : `The ${sw.name.toLowerCase()} is back in the drawer`, d.id || undefined);
+      if (d.back) showProfile(d.id || d.back);
+      else closeDialog();
+    },
     splashNext: () => { if (now() - splashAt < 700) return; splashQueue.shift(); showSplash(); }, // the delay stops a double tap skipping it
     openAll: () => boxes.forEach((b, i) => setTimeout(() => openBox(i), S.settings.stealth ? 0 : i * 170)),
     // The pack's main button opens what is still closed, so nobody leaves without seeing who they hired.
@@ -1846,7 +2211,7 @@
       const first = p.name.split(' ')[0];
       confirmDialog(`Let ${first} go?`, `<div class="profile-head">${av(id, 'lg')}<div><b>${esc(p.name)}</b><div class="muted small">${esc(jobTitle(id))}</div></div></div>
         <ul class="small"><li>${refs ? `<b>+${refs} referral${refs > 1 ? 's' : ''}</b> from ${p.noWork ? 'his' : 'their'} network` : 'No referrals: their network is still small'}</li><li>Everyone else's mood <b>−6</b></li>
-        ${S.stock ? '<li>ATLS <b>+2%</b>: investors love a "restructuring"</li>' : ''}<li>Their level, promotions and equipment go with them</li></ul>
+        ${S.stock ? `<li>${esc(E.ticker())} <b>+2%</b>: investors love a "restructuring"</li>` : ''}<li>Their level, promotions and equipment go with them</li></ul>
         <p class="muted small">People you let go sometimes start companies and send work your way. They might even apply again.</p>`, 'Let go', () => {
         if (!E.letGo(id)) return;
         save();
@@ -1859,6 +2224,8 @@
       closeSheet();
       if (d.g === 'word') showWord();
       else if (d.g === 'inbox') showInbox();
+      else if (d.g === 'bubble') showBubble();
+      else if (d.g === 'zen') showZen();
       else showStack();
     },
     wkey: d => wordKey(d.k),
@@ -1869,6 +2236,9 @@
     },
     izStart: () => izStart(),
     iz: (d, e) => { if (e && e.detail === 0) izTap(+d.i); }, // keyboard; taps arrive as pointerdown
+    bw: (d, e) => { if (e && e.detail === 0) bwPop(e.target.closest('.bw')); }, // keyboard; taps and drags arrive as pointer events
+    bwFresh: () => bwFresh(),
+    zenSmooth: () => zenSmooth(),
     ringBell: () => {
       const b = $('#bell');
       if (!b) return;
@@ -1973,7 +2343,7 @@
       if (fn) fn(el.dataset, e);
     });
     document.addEventListener('input', e => {
-      if (e.target.id === 'setName') { S.name = e.target.value.trim().slice(0, 20); save(); }
+      if (e.target.id === 'setName') { S.name = e.target.value.trim().slice(0, 20); save(); for (const el of $$('[data-tick]')) el.textContent = E.tickerFor(S.name); }
     });
     $('#overlay').addEventListener('click', e => {
       if (e.target.id !== 'overlay' || reveal || $('#dialog').classList.contains('intro-dialog')) return;
@@ -2033,6 +2403,7 @@
       }
       if (open && dlg.classList.contains('iz-game') && iz && /^[1-9]$/.test(e.key)) { e.preventDefault(); izTap(+e.key - 1); return; }
       if (open && dlg.classList.contains('stk-game') && stk && stk.state !== 'over' && (e.key === ' ' || e.key === 'Enter')) { e.preventDefault(); stkDrop(); return; }
+      if (open && dlg.classList.contains('zen-game') && zen && (e.key === ' ' || e.key === 'Enter') && !e.target.closest('button')) { e.preventDefault(); zenSweep(zen); return; }
       if (document.activeElement && document.activeElement.classList.contains('ch-plot') && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
         e.preventDefault();
         const plot = document.activeElement;
@@ -2122,7 +2493,7 @@
       if (built) lines.push(['crane', 'Office construction finished']);
       if (S.stock && before.price) {
         const ch = (S.stock.price * Math.pow(10, S.stock.splits - before.splits)) / before.price - 1;
-        lines.push(['investors', `ATLS ${pct(ch)} while you were away (now ${price(S.stock.price)})`]);
+        lines.push(['investors', `${E.ticker()} ${pct(ch)} while you were away (now ${price(S.stock.price)})`]);
       }
       if (S.tickets) lines.push(['gift', 'A Legend is waiting in Hiring']);
       if (lines.length) {
@@ -2144,8 +2515,12 @@
           s.nextMsgAt -= ms;
           if (s.league) { s.league.start -= ms; s.league.end -= ms; }
           s.boost.until -= ms;
-          s.games.inboxAt -= ms;
-          s.games.stackAt -= ms;
+          for (const k of ['inboxAt', 'stackAt', 'bubbleAt', 'zenAt']) if (s.games[k]) s.games[k] -= ms;
+          s.drama.next -= ms;
+          for (const q of s.drama.queue) q.at -= ms;
+          s.market.next -= ms;
+          if (s.market.ev) { s.market.ev.start -= ms; for (const c of s.market.ev.clues) c.at -= ms; }
+          for (const m of s.inbox) if (m.exp) m.exp -= ms;
           s.call.at -= ms;
           s.hustle.at -= ms; s.hustle.last -= ms;
           for (const a of Object.values(s.alumni)) if (a.startup) a.startup -= ms;
@@ -2154,6 +2529,7 @@
         },
         give: (cash = 0, refs = 0) => { E.state.cash += cash; E.state.referrals += refs; },
         get stack() { return stk; },
+        get zen() { return zen; },
       };
     }
   }

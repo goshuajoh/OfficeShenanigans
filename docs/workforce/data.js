@@ -17,6 +17,7 @@ window.WF_DATA = (() => {
     offlineCapH: 12,
     shotMinutes: 20, // one espresso shot refills every this many minutes
     stockMultiple: 1.5, // market cap = this × trailing daily revenue × sentiment
+    stockVol: 0.008, // typical share price move per 10 minutes in trading hours, before volatility clusters
     billStars: 2, // running projects bill as they go at this rating; the sign-off pays the rest
     hustleTap: 0.1, // each tap fills the hustle meter (0 to 1) this much
     hustleDrain: 0.25, // the meter drains this much per second
@@ -389,13 +390,116 @@ window.WF_DATA = (() => {
     },
     {
       id: 'oracle', name: 'Warren Oakes', title: 'Chief Strategy Officer', role: 'sales', r: 5, traits: ['rain', 'lucky'],
-      ability: { id: 'oracle', name: 'Market whisperer', desc: 'Company revenue +10%. After the IPO, the share price trades 20% higher and missed guidance hurts half as much.' },
+      ability: { id: 'oracle', name: 'Market whisperer', desc: 'Company revenue +10%. After the IPO, the share price trades 20% higher, missed guidance hurts half as much, and he tells you which market rumours are true.' },
       bio: 'Analysts call him before they call anyone else.', catch: 'Buy the rumour.',
       hello: "Warren Oakes. Strategy. I've seen nine market crashes and called seven of them. Let's build something investors fight over.",
       banter: ['Lunch with an analyst. Their price target went up during dessert.', 'Read the annual report on the bus. Twice. For fun.'],
       story: ['Bought his first share at twelve with lawn-mowing money. Still owns it.', 'Drives a fifteen-year-old car. Says it reminds him what money is for.', 'Writes the team a letter every year. Nobody asked. Everybody keeps them.'],
       bye: "I'd sell before the announcement, if I were you. Just a hunch.",
       look: { skin: 0, hair: 'bald', hc: '#bdb7ad', glasses: 'round', facial: 'mustache', fc: '#d6d1c9', top: '#1e3a5f', topStyle: 'blazer', bg: '#e1e8f0', mouth: 'smile' },
+    },
+    // ---- Guests: they rotate through the hiring pool, a few each week (see guestsAt in engine.js).
+    // Once hired, a guest stays like anyone else.
+    {
+      id: 'pip', name: 'Pip Harlow', role: 'design', r: 0, traits: ['coffee', 'social'], guest: true,
+      bio: 'Design intern by day. DJ by night. Napper by lunch.', catch: "Is this a vibe? It's giving vibe.",
+      hello: "Hiii! Pip. Design intern. I made you a welcome playlist. It's four hours long. You don't have to listen. (Please listen.)",
+      banter: ['Made the loading spinner spin to the beat. Nobody asked. Everyone noticed.', 'My design file has 300 pages. Page 1 is called "start here". Page 2 is called "no, start here".'],
+      story: ['Got the internship by redesigning our 404 page and emailing it to the CEO at 2am.', 'Keeps a sketchbook of everyone in the office as cartoon animals. You are an owl. A distinguished owl.', 'Sends their nan a screenshot of every design that ships. She has a folder.'],
+      bye: "Okay. I'm taking the playlist with me. Actually, keep it. It's five hours now.",
+      look: { skin: 2, hair: 'bob', hc: '#7c3aed', acc: 'headphones', top: '#f472b6', topStyle: 'hoodie', bg: '#fce7f3', mouth: 'grin' },
+    },
+    {
+      id: 'ollie', name: 'Ollie Ng', role: 'sre', r: 0, traits: ['night'], guest: true,
+      bio: 'Has never touched a server. Has strong opinions about them anyway.', catch: 'Have you tried turning it off and on? Which one is "on"?',
+      hello: "Ollie! Ops intern. I've read every runbook on the wiki. Twice. Some of them are just recipes, by the way.",
+      banter: ['Set up an alert for when the coffee machine is empty. It has fired eleven times today.', 'Named my first server Kevin. Kevin is doing great. Kevin has 99.2% uptime.'],
+      story: ['Built a computer from parts in a skip at twelve. It still works. It runs a weather station.', 'Is scared of the dark but loves night shifts. Uses a very bright lamp.', 'Wants to be the one who keeps the lights on for everybody. Literally and otherwise.'],
+      bye: 'Handing over Kevin. Please be nice to Kevin.',
+      look: { skin: 1, hair: 'messy', hc: '#0f0f10', glasses: 'square', top: '#0f766e', topStyle: 'hoodie', bg: '#dff3f1', mouth: 'smile' },
+    },
+    {
+      id: 'sunita', name: 'Sunita Rao', role: 'pm', r: 1, traits: ['early', 'mentor'], guest: true,
+      bio: 'Colour-codes the colour codes.', catch: "I've made a spreadsheet for that.",
+      hello: "Sunita here. I've already added you to three calendars, and one of them is just for birthdays.",
+      banter: ['The roadmap is now colour-coded by colour. Took a while. Worth it.', 'Ran a retro on our retro. Action item: fewer retros.'],
+      story: ['Planned her own wedding with a Gantt chart. It finished on time and under budget.', 'Runs a book club where everyone reads a different book. Attendance: 100%.', 'Learned to say no kindly from her grandfather, who ran a corner shop for forty years.'],
+      bye: "I've written a handover doc. It has a table of contents and an index. Goodbye.",
+      look: { skin: 3, hair: 'long', hc: '#1c1210', acc: 'earrings', top: '#b45309', topStyle: 'collar', bg: '#fdf0e1', mouth: 'smile' },
+    },
+    {
+      id: 'bram', name: 'Bram de Vries', role: 'eng', r: 1, traits: ['lone'], guest: true,
+      bio: 'Speaks fluent regex. Small talk, less so.', catch: '/^(yes|no)$/',
+      hello: 'Bram. Engineer. I prefer chat to calls, and silence to chat. Nice to meet you. Genuinely.',
+      banter: ['Replaced 400 lines with one regular expression. Nobody can read it. Including me.', 'Wore headphones for six hours. They were not plugged in. Peace.'],
+      story: ['Grew up on a houseboat. Debugs best when the floor moves a little.', 'Has a cactus named Linus. Linus is 22 years old.', "Quietly fixes other people's broken tests on Sunday nights and never mentions it."],
+      bye: 'Okay. Bye. That was a lot of words. Good luck.',
+      look: { skin: 0, hair: 'wavy', hc: '#c8a165', facial: 'stubble', fc: '#b08f5a', top: '#475569', topStyle: 'sweater', bg: '#e8ecf1', mouth: 'flat' },
+    },
+    {
+      id: 'marisol', name: 'Marisol Vega', role: 'sales', r: 2, traits: ['rain', 'social'], guest: true,
+      bio: 'Once sold ice to a penguin. The penguin renewed.', catch: "Let's make it a yes.",
+      hello: "Marisol! Sales. I already like you. That's not a sales technique. Well, it is, but it's also true.",
+      banter: ['Turned a complaint call into an upsell. They thanked me. Twice.', 'My pipeline is so full I need a second pipe.'],
+      story: ['Sold encyclopaedias door to door at sixteen. Bought her mum a car with the bonus.', "Remembers the names of every client's kids. And dogs. And the dogs' birthdays.", 'Cries at every product launch. Happy tears. Mostly.'],
+      bye: "Not goodbye. 'See you later.' I'll sell you on it eventually.",
+      look: { skin: 3, hair: 'curly', hc: '#2b1a12', acc: 'earrings', top: '#dc2626', topStyle: 'blazer', bg: '#fde8e8', mouth: 'grin' },
+    },
+    {
+      id: 'hiroshi', name: 'Hiroshi Tanaka', role: 'design', r: 2, traits: ['perfect'], guest: true,
+      bio: 'Believes kerning is a moral issue.', catch: 'One more pixel to the left.',
+      hello: "Hiroshi. Designer. Your logo is one pixel off centre. I'll fix it later. It's fine. It's not fine. I'll fix it now.",
+      banter: ['Spent an hour on a drop shadow. It is perfect now. Nobody will notice. I will notice.', 'Someone put Comic Sans in a client deck. I need a minute.'],
+      story: ['Apprenticed under a sign painter in Osaka. Can paint a perfect circle by hand.', 'Owns forty pens and uses exactly one.', 'Redrew every icon at his last job over a weekend because "they deserved better".'],
+      bye: "I'm leaving my spacing tokens. Please don't touch them. Please.",
+      look: { skin: 1, hair: 'slick', hc: '#141414', glasses: 'round', top: '#111827', topStyle: 'collar', bg: '#eceef2', mouth: 'flat' },
+    },
+    {
+      id: 'delphine', name: 'Delphine Moreau', role: 'eng', r: 3, traits: ['work', 'speed'], guest: true,
+      bio: 'Writes code like it owes her money.', catch: "It's shipped. Next.",
+      hello: "Delphine. I read the codebase on the train in. We'll talk about the tests. Kindly. Ish.",
+      banter: ['Deleted a microservice. Nothing broke. Nobody used it. It had a logo.', 'Finished my sprint on Tuesday. Started the next sprint on Tuesday afternoon.'],
+      story: ['Wrote her first compiler for a school project. Her teacher learned from it.', 'Runs ultramarathons. Says debugging is harder.', 'Mentors three people at other companies, for free, on Friday mornings.'],
+      bye: "Fine. Everything's documented. You won't need me. You'll want me. Different thing.",
+      look: { skin: 0, hair: 'pony', hc: '#5a2e1a', top: '#1f2937', topStyle: 'tee', bg: '#e5e7eb', mouth: 'smirk' },
+    },
+    {
+      id: 'kofi', name: 'Kofi Mensah', role: 'sre', r: 3, traits: ['mentor', 'early'], guest: true,
+      bio: 'Calm in a crisis. Calm out of one, too.', catch: 'Deep breath. Then the logs.',
+      hello: "Kofi. Reliability. I'm who you call at 3am. Please don't call me at 3am. But you can.",
+      banter: ['Incident resolved. Root cause: a semicolon. Feelings: complicated.', 'Taught the new hires to read logs. They read them like poetry now.'],
+      story: ["Kept a hospital's systems running through a flood. Slept on the server room floor for two nights.", 'Plays the talking drum. Uses it to call the team to standup. It works.', 'Answers every "stupid question" like it is the best one he has heard all day.'],
+      bye: "I'll leave you my on-call playlist. It's mostly whale sounds. Trust me.",
+      look: { skin: 5, hair: 'buzz', hc: '#0d0a09', facial: 'beard', fc: '#0d0a09', top: '#166534', topStyle: 'collar', bg: '#e3f4e8', mouth: 'smile' },
+    },
+    {
+      id: 'lena', name: 'Lena Fischer', role: 'pm', r: 4, traits: ['meeting', 'rain'], guest: true,
+      bio: 'Turns roadmaps into reality. And reality into roadmaps.', catch: 'What problem are we solving?',
+      hello: "Lena. Product. I cancelled four meetings to be here, so let's make this one count.",
+      banter: ['Cancelled a meeting about meetings. Got an hour back. Spent it on the roadmap. Happy.', 'Said no to a feature today. The client thanked me later. They usually do.'],
+      story: ['Shipped a product used by fifty million people and never once wore a lanyard.', 'Keeps a notebook of every "why" a customer has ever told her. It is on volume nine.', 'Left a bigger company because "the decks were bigger than the products".'],
+      bye: "Let me guess. A reorg. I've already drafted your announcement. You're welcome.",
+      look: { skin: 0, hair: 'bob', hc: '#e8d5a3', glasses: 'square', top: '#0e7490', topStyle: 'blazer', bg: '#e0f2f7', mouth: 'smirk' },
+    },
+    {
+      id: 'valentina', name: 'Valentina Cruz', title: 'Chief Happiness Officer', role: 'pm', r: 5, traits: ['social'], guest: true,
+      ability: { id: 'cupid', name: 'Matchmaker', desc: 'Office romances always work out and never end. Couples work 20% better together.' },
+      bio: 'Has officiated four office weddings. Unofficially.', catch: 'Love is a team sport.',
+      hello: 'Hola! Valentina. I make people happy at work. Professionally. Also unprofessionally, if needed. I brought churros.',
+      banter: ['Two people on the team finally said hello in the lift. I am planning the wedding.', 'Organised "bring your plant to work" day. The plants made friends.'],
+      story: ['Ran a dating show at university. Three of the couples are still married.', "Remembers everyone's coffee order. And their love language.", 'Believes teams work better when people like each other. Has data. Has a lot of data.'],
+      bye: "I'll go. But I'm leaving the playlist for the next office party. Track 7 is for you.",
+      look: { skin: 2, hair: 'wavy', hc: '#3b1d12', acc: 'flower', top: '#e11d48', topStyle: 'blazer', bg: '#ffe4ec', mouth: 'grin' },
+    },
+    {
+      id: 'agnes', name: 'Agnes Pratt', title: 'Office Manager', role: 'pm', r: 5, traits: ['early', 'work'], guest: true,
+      ability: { id: 'builder', name: 'Knows a contractor', desc: 'Office upgrades build twice as fast and cost 20% less.' },
+      bio: 'Knows where the stapler is. Knows where everything is.', catch: 'Leave it with me.',
+      hello: "Agnes. Office manager. I've already fixed the wobbly table, the lift music and two marriages. What do you need?",
+      banter: ['Had the meeting rooms repainted over the weekend. The builders were scared of me. Good.', 'Found the missing stapler. It was in the fridge. I have questions.'],
+      story: ['Ran a hotel for twenty years. Has seen everything twice.', 'Keeps a drawer of emergency supplies: plasters, chocolate and one spare tie.', 'Says the secret to a happy office is "a good chair, a hot drink and somebody noticing".'],
+      bye: "I'll go. The spare keys are in the blue tin. The real spare keys are in the red one.",
+      look: { skin: 1, hair: 'bun', hc: '#c9c3bb', glasses: 'round', top: '#7c2d12', topStyle: 'sweater', bg: '#f5ebe0', mouth: 'smile' },
     },
   ];
 
@@ -488,7 +592,7 @@ window.WF_DATA = (() => {
     { name: 'Series A', at: 1e5, line: 'Series A is done! We leased the rest of the floor: lounge, phone booths and a proper project office.' },
     { name: 'Series B', at: 1e7, line: "Series B! We're taking the floor upstairs: a training library and a real server room." },
     { name: 'Series C', at: 4e8, line: "Series C closed. Game room and a client lobby. Investors love a lobby." },
-    { name: 'IPO', at: 8e9, line: "We rang the bell! Atlas is a public company: ticker ATLS. From today every day is a quarter, and Wall Street is watching. Thank you. Seriously." },
+    { name: 'IPO', at: 8e9, line: "We rang the bell! Atlas is a public company: ticker {T}. From today every day is a quarter, and Wall Street is watching. Thank you. Seriously." },
   ];
 
   // After the IPO the company is valued by the market. Milestones come at 1, 2.5 and 5 × every power of ten, forever;
@@ -511,8 +615,10 @@ window.WF_DATA = (() => {
     { career: 2, id: 'hiring', title: 'Hiring', text: "HR approved headcount! I've sent you 3 referrals. Each one opens a blind CV: you only find out who you hired when you open it." },
     { career: 2, id: 'rush', title: 'Espresso shots', text: "Tip: if you're waiting on a project, rush it with an espresso shot. You get a new shot every 20 minutes." },
     { career: 3, id: 'size:M', title: 'Sprints', text: 'Two-person Sprints are open: three minutes, much better pay. Pair people whose skills match what the client needs.' },
+    { career: 3, id: 'drama', title: 'Office life', text: "Fair warning: the team is now big enough for office drama. Romance, feuds, missing yoghurt. People will ask you to sort things out, and what you decide sticks. Choose wisely. Or at least choose." },
     { career: 3, id: 'commit', title: 'Daily commitment', text: "Each morning I'll ask what you're committing to. Pick a target, hit it, get rewarded. Miss it and… well, you get nothing. No pressure. 🙂" },
-    { career: 4, id: 'breaks', title: 'Breaks', text: 'Wellbeing matters! The Breaks page has three quick games: a daily word, Inbox Zero and Stack. Each one pays out a boost.' },
+    { career: 4, id: 'breaks', title: 'Breaks', text: 'Wellbeing matters! The Breaks page has quick games that pay out boosts, and two calm ones with no timer at all for when the day gets loud.' },
+    { career: 5, id: 'swag', title: 'Swag box', text: 'Marketing over-ordered merch. Buy a swag box on the Hiring page, then give people something to wear from their profile. Some of it even helps.' },
     { career: 5, id: 'league', title: 'Manager league', text: "Fun fact: you're ranked every week against other managers by client stars. Top two move up a league. I'm told Derek takes it very seriously." },
     { career: 6, id: 'gear', title: 'IT equipment', text: 'IT has a budget now! Great deliveries sometimes come with new equipment for your team. It equips itself.' },
     { career: 7, id: 'size:L', title: 'Projects', text: 'Ten-minute Projects are open. Bigger clients, bigger cheques.' },
@@ -760,7 +866,7 @@ window.WF_DATA = (() => {
   // Decisions that only come up once you're a public company. `from` sets a fixed sender; fx.stock moves the share price.
   const IPO_DECISIONS = [
     {
-      id: 'activist', from: 'cfo', text: 'An activist investor bought 5% of ATLS. They want "efficiencies". That usually means layoffs.',
+      id: 'activist', from: 'cfo', text: 'An activist investor bought 5% of {T}. They want "efficiencies". That usually means layoffs.',
       choices: [
         { label: 'Protect the team', reply: "Told them no. Politely. They're writing a strongly worded letter.", fx: { teamMood: 6, stock: -0.04 } },
         { label: 'Promise "discipline"', reply: 'They loved the word "discipline". The team did not.', fx: { stock: 0.06, teamMood: -6 } },
@@ -776,7 +882,7 @@ window.WF_DATA = (() => {
     {
       id: 'profile', role: 'sales', text: 'A business magazine wants to profile someone from the team. Can I do it?',
       choices: [
-        { label: 'Go for it', reply: 'Booking a haircut. And a better haircut.', risk: { p: 0.6, delay: 20, win: { fx: { stock: 0.06, bond: 6 }, text: 'The profile is out: "The most fun company in tech." ATLS is up!' }, lose: { fx: { stock: -0.03 }, text: 'I may have said "we basically print money". Legal would like a word.' } } },
+        { label: 'Go for it', reply: 'Booking a haircut. And a better haircut.', risk: { p: 0.6, delay: 20, win: { fx: { stock: 0.06, bond: 6 }, text: 'The profile is out: "The most fun company in tech." {T} is up!' }, lose: { fx: { stock: -0.03 }, text: 'I may have said "we basically print money". Legal would like a word.' } } },
         { label: 'Comms team only', reply: 'Fair. I will practise my quotes in the mirror anyway.', fx: { bond: -2 } },
       ],
     },
@@ -796,10 +902,10 @@ window.WF_DATA = (() => {
     },
   ];
   const IPO_BANTER = [
-    'Refreshed the ATLS price 40 times today. Productivity: low. Net worth: up.',
+    'Refreshed the {T} price 40 times today. Productivity: low. Net worth: up.',
     'Is it normal to check the stock price before checking email?',
     "My mum asked if I'm a millionaire now. I said \"on paper\". She asked what paper.",
-    'Bought one share of ATLS for my nephew. He wants to know when he gets a desk.',
+    'Bought one share of {T} for my nephew. He wants to know when he gets a desk.',
   ];
 
   // Little messages with no decision attached; reacting builds bond.
@@ -843,6 +949,9 @@ window.WF_DATA = (() => {
     word: { name: 'Daily word', desc: 'Guess the five-letter word in six tries. Same word for the whole office, and for lintcheck in the terminal.', reward: 'Referrals and a 30-minute revenue boost' },
     inbox: { name: 'Inbox Zero', desc: '30 seconds of notifications. Tap them before they pile up, chain them for combos, and never click the phishing.', cooldown: 30, reward: 'Espresso shots', tiers: [40, 90, 150], unit: 'points' },
     stack: { name: 'Stack', desc: 'Build Atlas HQ one floor at a time. Tap to drop each floor. Line it up perfectly or the overhang falls off.', cooldown: 30, reward: 'A revenue boost', tiers: [8, 15, 25], unit: 'floors' },
+    // Calm games: no timer and nothing to lose. A finished sheet or a raked garden lifts the whole team's mood.
+    bubble: { name: 'Bubble wrap', desc: 'A fresh sheet of bubble wrap. Pop as many as you like. There is no timer.', cooldown: 20, reward: 'Team mood', calm: true, goal: 48, mood: 4 },
+    zen: { name: 'Zen garden', desc: 'Rake the sand. Place a stone or two. Breathe. Nothing to win and nothing to lose.', cooldown: 20, reward: 'Team mood and a little rest', calm: true, goal: 12, mood: 5 },
   };
   // Same list and order as terminal/lintcheck.py, so the web and terminal games share the daily word.
   const WORDS = `
@@ -896,9 +1005,327 @@ window.WF_DATA = (() => {
     ref: ['My cousin is looking for a job. Can I send you their CV?', 'I know someone great who wants to join you.'],
   };
 
+  // ------------------------------------------------------------------ swag
+  // Bought from the swag box with budget. Anyone can wear one item; it shows on their picture (art.js draws it).
+  // fx: skill (+% on all work), night/early (+% then), solo (+% alone), mood (baseline), rest (faster recovery),
+  // xp (+% XP), bond (+% from coffee chats), lucky (chance of an extra star), rain (+% revenue), speed (projects finish sooner),
+  // social (teammates' mood after a delivery).
+  const SWAG = {
+    beanie: { name: 'Team beanie', r: 0, fx: { mood: 4 }, line: 'Hand-knitted by Ops during an outage. Smells faintly of server room.', say: 'Wearing the team beanie. It is warm. It is itchy. It is mine now.' },
+    lanyard: { name: 'Lanyard of many badges', r: 0, fx: { xp: 0.1 }, line: 'A badge from every conference since 2014. Clinks when they walk.', say: 'Got a lanyard with 40 conference badges on it. I have been to none of them. I have learned from all of them.' },
+    bowtie: { name: 'Clip-on bow tie', r: 0, fx: { rain: 0.05 }, line: 'For client calls. Business on top. Business underneath, too.', say: 'Clip-on bow tie for client calls. They take me 5% more seriously. I measured.' },
+    cap: { name: 'Startup cap', r: 1, fx: { speed: 0.04 }, line: '"Move fast" on the front. "Break things" has been taped over.', say: 'Wearing the startup cap backwards. I feel faster. I am not sure I am faster.' },
+    scarf: { name: 'Cosy scarf', r: 1, fx: { rest: 0.4 }, line: 'The office is 19°C all year. The scarf knows.', say: 'I have a scarf now. I will never be cold in a meeting again.' },
+    catears: { name: 'Cat-ear headband', r: 1, fx: { bond: 0.5 }, line: 'Started as a Halloween joke. Now it is a personal brand.', say: 'Wearing the cat ears. Everyone stops by my desk now. I have never been so popular.' },
+    aviators: { name: 'Aviator shades', r: 2, fx: { lucky: 0.08 }, line: 'Indoors. Always indoors.', say: 'Aviators on. Indoors. I am not taking them off. Clients find it confident.' },
+    monocle: { name: 'Monocle', r: 2, fx: { skill: 0.08 }, line: 'Reads specs very closely. Very, very closely.', say: 'I have acquired a monocle. I now read specs at a level previously unknown to science.' },
+    partyhat: { name: 'Party hat', r: 2, fx: { social: 3 }, line: "Every day is someone's birthday somewhere.", say: 'Party hat on. Every delivery is a party now. You are all invited.' },
+    fedora: { name: 'Detective fedora', r: 3, fx: { solo: 0.25 }, line: 'Solves bugs alone. Narrates it in the third person.', say: 'Wearing the fedora. The bug was in the server room. With a null pointer. Case closed.' },
+    chain: { name: 'Gold chain', r: 3, fx: { rain: 0.15 }, line: 'Closes deals. Opens doors. Clinks.', say: 'Gold chain. I walked into a client meeting and they doubled the budget before I sat down.' },
+    wizard: { name: 'Wizard hat', r: 3, fx: { night: 0.3 }, line: 'Codes best after midnight. Calls it "casting sudo".', say: 'Wizard hat acquired. After 6pm I am basically unstoppable. Before 6pm I am a person in a hat.' },
+    crown: { name: 'Paper crown', r: 4, fx: { skill: 0.15, mood: 5 }, line: 'From the birthday cake. Has not taken it off since.', say: 'I have been crowned. I do not know by whom. I accept.' },
+  };
+  const SWAG_WEIGHTS = [50, 28, 15, 6, 1]; // by rarity, as in RARITY_COLORS
+  const SWAG_BOX = { name: 'Swag box', desc: 'Merch that marketing over-ordered. Somebody on the team will love it.', price: 4 }; // price × a typical Sprint payout
+
+  // ------------------------------------------------------------------ office drama
+  // Short stories between people on the team: {a} and {b} (first names) and {c}, a third person, when there is one.
+  // kind: 'romance' (two people who are not seeing anyone), 'feud' (two people who are not a couple), 'team', or
+  // 'couple' (two people who are dating; minHours: how long they must have been together).
+  // Each beat is a message from 'a', 'b', 'c' or someone in CAST. On arrival a beat can set rel. Each choice can apply
+  // fx ({ a, b, c: person fx; team: everyone's mood; cash }), set rel, make someone leave, and lead to a later beat:
+  // next: { beat, delay } or { p, win, lose, delay } (minutes; an empty beat name ends the story). ifOwned swaps a beat.
+  // rel: how a and b get on now: 'crush', 'dating', 'friends', 'feud', 'exes', or '' for nothing in particular.
+  const DRAMA = [
+    {
+      id: 'plant', kind: 'romance',
+      beats: {
+        start: { from: 'a', text: "Weird question. {b} keeps watering my desk plant when I'm not here. Is that… a thing? Is it a thing?",
+          choices: [
+            { label: 'It is a thing', reply: 'Oh no. It IS a thing. Okay. I am going to water theirs back. Casually.', rel: 'crush', next: { beat: 'lunch', delay: 25 } },
+            { label: 'Plants are a team effort', reply: 'Right. Team effort. Totally. *waters plant aggressively*', fx: { a: { mood: -2 } } },
+          ] },
+        lunch: { from: 'b', text: '{a} asked me to lunch. Just lunch. A normal lunch. Is it weird if I bring my good hot sauce?',
+          choices: [
+            { label: 'Bring the hot sauce', reply: 'Bringing it. If this goes well, I am naming the bottle after you.', next: { p: 0.75, win: 'couple', lose: 'awkward', delay: 30 } },
+            { label: 'Keep it professional', reply: 'A professional lunch. Spreadsheets on the side. Got it.', rel: 'friends', fx: { b: { mood: -3 } } },
+          ] },
+        couple: { from: 'bot', rel: 'dating', text: '{a} and {b} are officially an item. They now share a calendar called "Us". Productivity: unclear.',
+          choices: [{ label: 'Wish them well', fx: { a: { mood: 8, bond: 4 }, b: { mood: 8, bond: 4 }, team: 2 } }] },
+        awkward: { from: 'a', rel: 'friends', text: 'Lunch update: {b} called it "a great networking opportunity". I am going to lie down in the server room for a bit.',
+          choices: [
+            { label: 'Take ten minutes', reply: 'Thanks. The servers are very understanding.', fx: { a: { rest: 10, mood: 6 } } },
+            { label: 'Plenty of fish', reply: 'The only fish here lives in the lounge tank. His name is Gary.', fx: { a: { mood: -2 } } },
+          ] },
+      },
+    },
+    {
+      id: 'frogs', kind: 'romance',
+      beats: {
+        start: { from: 'a', text: 'Someone keeps leaving origami frogs on my desk. Seven so far. They are very good frogs.',
+          choices: [
+            { label: 'Find out who', reply: 'Launching an investigation. I have bought a magnifying glass.', next: { beat: 'reveal', delay: 20 } },
+            { label: 'Enjoy the frogs', reply: 'You are right. A mystery frog a day keeps the stress away.', fx: { a: { mood: 5 } } },
+          ] },
+        reveal: { from: 'b', text: "Okay, it was me. The frogs. I fold things when I'm nervous, and {a} makes me nervous. Don't tell them. Actually, do. No, don't.",
+          choices: [
+            { label: 'Tell them yourself', reply: 'Deep breath. Bringing frog number eight as backup.', next: { p: 0.7, win: 'yes', lose: 'no', delay: 15 } },
+            { label: 'Your secret is safe', reply: 'Thank you. The frogs will continue anonymously.', rel: 'crush', fx: { b: { bond: 4 } } },
+          ] },
+        yes: { from: 'a', rel: 'dating', text: '{b} gave me frog number eight and asked me out. I said yes. The frog said yes too, probably.',
+          choices: [{ label: 'Frog-tastic', fx: { a: { mood: 10 }, b: { mood: 10 }, team: 2 } }] },
+        no: { from: 'b', rel: 'friends', text: '{a} said they are flattered but seeing someone. We are friends now. They kept all the frogs, which is either sweet or a lot.',
+          choices: [{ label: 'Proud of you for asking', reply: 'Thanks. I am going to fold my feelings into a crane.', fx: { b: { bond: 5, mood: 2 } } }] },
+      },
+    },
+    {
+      id: 'karaoke', kind: 'romance',
+      beats: {
+        start: { from: 'c', text: 'Karaoke night report: {a} and {b} did a duet. A power ballad. There were three key changes and one kneel.',
+          choices: [
+            { label: 'Book them for the party', reply: 'Booked. I have also booked earplugs.', fx: { a: { mood: 5 }, b: { mood: 5 }, team: 2 }, next: { p: 0.5, win: 'sparks', lose: 'duo', delay: 30 } },
+            { label: 'Ban power ballads', reply: 'Banned. The office is quieter. And sadder.', fx: { team: -3 } },
+          ] },
+        sparks: { from: 'bot', rel: 'crush', text: '{a} and {b} have been "rehearsing" in meeting room 2 every lunchtime. Nobody has heard any singing.',
+          choices: [{ label: 'Leave them to it', fx: { a: { mood: 3 }, b: { mood: 3 } } }] },
+        duo: { from: 'a', rel: 'friends', text: '{b} and I are a duo now. We are called The Deliverables. We have merch.',
+          choices: [{ label: 'Buy a T-shirt', fx: { cash: -0.1, a: { bond: 4 }, b: { bond: 4 } } }] },
+      },
+    },
+    {
+      id: 'thermostat', kind: 'feud',
+      beats: {
+        start: { from: 'a', text: '{b} set the thermostat to 24°C again. I have filed a complaint with the thermostat. It did not respond.',
+          choices: [
+            { label: 'Side with {a}: 19°C', reply: 'Justice. Cold, crisp justice.', rel: 'feud', fx: { a: { mood: 5 }, b: { mood: -6 } }, next: { beat: 'war', delay: 40 } },
+            { label: 'Side with {b}: 24°C', reply: 'Fine. I will be in a sauna. Working. Sweating. Working.', rel: 'feud', fx: { a: { mood: -6 }, b: { mood: 5 } }, next: { beat: 'war', delay: 40 } },
+            { label: 'Buy a fan and a blanket', reply: 'A compromise. I hate it. I love it. The blanket is very soft.', rel: 'friends', fx: { cash: -0.3, a: { mood: 3 }, b: { mood: 3 } } },
+          ] },
+        war: { from: 'c', text: '{a} has brought in a heater. {b} has brought in a fan. They point them at each other. I sit between them.',
+          choices: [
+            { label: 'Lock it at 21°C', reply: 'Locked. They are equally unhappy. I believe that is called fairness.', fx: { a: { mood: -2 }, b: { mood: -2 } }, next: { p: 0.6, win: 'truce', lose: 'notes', delay: 30 } },
+            { label: 'Seat them apart', reply: 'Moved. Now they glare across the whole room, which is a longer glare.', rel: '', fx: { c: { mood: 4 } } },
+            { label: 'Let them fight it out', reply: "Okay. I'll get popcorn. And a coat.", fx: { team: -3 } },
+          ] },
+        truce: { from: 'bot', rel: 'friends', text: '{a} and {b} agree that 21°C is "fine". They were seen sharing a blanket. The climate talks were a success.',
+          choices: [{ label: 'Historic', fx: { a: { mood: 4 }, b: { mood: 4 } } }] },
+        notes: { from: 'bot', text: '{a} and {b} now talk only by sticky note. The sticky notes are getting longer. One has footnotes.',
+          choices: [{ label: 'Noted', fx: { team: -1 } }] },
+      },
+    },
+    {
+      id: 'credit', kind: 'feud',
+      beats: {
+        start: { from: 'a', text: '{b} presented my slide deck at the all-hands and took a bow. A BOW. Slide 4 still had my name on it.',
+          choices: [
+            { label: 'Set the record straight', reply: 'Thank you. I have made a new slide. It just says my name.', rel: 'feud', fx: { a: { mood: 6, bond: 6 }, b: { mood: -8 } }, next: { p: 0.5, win: 'sorry', lose: 'notes', delay: 45 } },
+            { label: 'Sit them both down', reply: 'A meeting. Both of us. In a small room. Great. Great great great.', fx: { a: { rest: 10 }, b: { rest: 10 } }, next: { p: 0.75, win: 'sorry', lose: 'notes', delay: 15 } },
+            { label: "It's all one team", reply: 'Sure. One team. One name on the slide. Not mine.', fx: { a: { mood: -8, bond: -8 } }, next: { beat: 'offer', delay: 60 } },
+          ] },
+        sorry: { from: 'b', rel: 'friends', text: 'I owe {a} an apology, a coffee and a slide credit. Possibly a kidney. We are good now.',
+          choices: [{ label: 'Glad you sorted it', fx: { a: { mood: 4 }, b: { mood: 4, bond: 3 } } }] },
+        notes: { from: 'bot', rel: 'feud', text: '{a} and {b} have started a sticky note war. There are 41 sticky notes. One just says "per my last sticky note".',
+          choices: [
+            { label: 'Confiscate the notes', fx: { a: { mood: -2 }, b: { mood: -2 } }, next: { p: 0.5, win: 'sorry', lose: '', delay: 60 } },
+            { label: 'Frame the best one', fx: { team: 3 } },
+          ] },
+        offer: { from: 'a', text: 'Initech offered me a job. Same money, but they put names on slides. Give me one reason to stay.',
+          choices: [
+            { label: 'Give them a raise', reply: 'A raise is a very good reason. I will stay. My name is going on everything.', fx: { cash: -1.5, a: { mood: 15, bond: 10 } } },
+            { label: 'Credit them at the all-hands', reply: 'In front of everyone? …Thank you. I will stay.', fx: { a: { mood: 10, bond: 8 }, b: { mood: -4 } } },
+            { label: 'Wish them luck', reply: 'Okay. It was nice working with you. Mostly.', leave: 'a' },
+          ] },
+      },
+    },
+    {
+      id: 'desk', kind: 'feud',
+      beats: {
+        start: { from: 'b', text: "{a}'s plants have spread onto my desk. I say it is an invasion. {a} says it is \"rewilding\".",
+          choices: [
+            { label: 'Draw a line in tape', reply: 'Taped. The plants are already leaning over it.', fx: { a: { mood: -2 }, b: { mood: 2 } } },
+            { label: 'Side with the plants', reply: 'Unbelievable. I work in a rainforest now.', rel: 'feud', fx: { a: { mood: 5 }, b: { mood: -5 } } },
+            { label: 'Plants for everyone', reply: 'The whole office is a jungle now. Morale is up. So is the humidity.', rel: 'friends', fx: { cash: -0.2, team: 4 } },
+          ] },
+      },
+    },
+    {
+      id: 'fridge', kind: 'team',
+      beats: {
+        start: { from: 'a', text: 'Someone ate my labelled yoghurt. Again. The label said DO NOT. In capitals. Underlined.',
+          choices: [
+            { label: 'Install a fridge camera', reply: 'A camera. Yes. I want to see their face.', fx: { cash: -0.3 }, next: { beat: 'caught', delay: 25 } },
+            { label: 'Send an all-staff email', reply: 'Sending it. Subject line: "To whoever".', fx: { a: { mood: 3 }, team: -2 }, next: { beat: 'thread', delay: 20 } },
+            { label: 'Buy everyone yoghurt', reply: 'Yoghurt for all. The thief has been defeated by kindness. And by dairy.', fx: { cash: -0.3, team: 5 } },
+          ] },
+        caught: { from: 'a', ifOwned: { biscuit: 'dog' }, text: 'The camera caught them. It was {b}. They looked straight into the lens while eating it. Strawberry. MY strawberry.',
+          choices: [
+            { label: '{b} buys a crate of yoghurt', fx: { a: { mood: 6 }, b: { mood: -3 } } },
+            { label: 'Laugh it off', rel: 'friends', fx: { team: 3, a: { mood: -1 } } },
+          ] },
+        dog: { from: 'a', text: 'The camera caught the thief. It was Biscuit. He has learned to open the fridge. He is not sorry. He is a very good boy.',
+          choices: [{ label: 'Child-lock the fridge', fx: { team: 4 } }, { label: 'Promote Biscuit', fx: { team: 6 } }] },
+        thread: { from: 'bot', text: 'The yoghurt email now has 63 replies, including a poem, a diagram and an apology from someone who did not do it.',
+          choices: [{ label: 'Close the thread', fx: { team: -1 } }, { label: 'Reply with a poem', fx: { team: 5, a: { mood: 2 } } }] },
+      },
+    },
+    {
+      id: 'replyall', kind: 'team',
+      beats: {
+        start: { from: 'bot', text: '{a} replied all to the whole company with "love you too". It was meant for their mum. It went to 4,000 people.',
+          choices: [
+            { label: 'Laugh it off together', fx: { team: 4, a: { mood: 3, bond: 3 } }, next: { p: 0.35, win: 'twist', lose: '', delay: 20 } },
+            { label: 'Send a memo about email', fx: { a: { mood: -6 }, team: -1 } },
+            { label: 'Frame it in the kitchen', fx: { team: 6, a: { mood: -2, bond: 2 } } },
+          ] },
+        twist: { from: 'bot', rel: 'crush', text: '{b} replied all to the reply all with "love you too". The whole company is now very invested in {a} and {b}.',
+          choices: [{ label: 'Oh no', fx: { team: 3 } }, { label: 'Oh yes', fx: { team: 4, a: { mood: 2 }, b: { mood: 2 } } }] },
+      },
+    },
+    {
+      id: 'gossip', kind: 'team',
+      beats: {
+        start: { from: 'c', text: 'Rumour going round: layoffs next week. Nobody is getting any work done. Someone is updating their CV in meeting room 3.',
+          choices: [
+            { label: 'Hold an all-hands', reply: 'You said there are no layoffs and everyone clapped. One person cried. In a good way.', fx: { team: 6 } },
+            { label: 'Find the source', reply: 'Investigating. Discreetly. With a clipboard.', next: { beat: 'source', delay: 20 } },
+            { label: 'Ignore it', reply: 'Okay. Everyone is whispering now.', fx: { team: -6 } },
+          ] },
+        source: { from: 'c', text: 'Found the source: {a}. They saw a spreadsheet called "cuts". It was the sandwich order.',
+          choices: [{ label: 'Share the sandwich order', fx: { team: 5, a: { mood: -2 } } }, { label: 'A quiet word with {a}', fx: { team: 3, a: { mood: -4, bond: 2 } } }] },
+      },
+    },
+    {
+      id: 'breakup', kind: 'couple', minHours: 3,
+      beats: {
+        start: { from: 'bot', rel: 'exes', text: '{a} and {b} have broken up. They both want the window desk. They are both "totally fine".',
+          choices: [
+            { label: '{a} gets the window', fx: { a: { mood: 3 }, b: { mood: -6 } } },
+            { label: '{b} gets the window', fx: { a: { mood: -6 }, b: { mood: 3 } } },
+            { label: 'Swap every week', fx: { a: { mood: -1 }, b: { mood: -1 } }, next: { p: 0.6, win: 'mature', lose: '', delay: 90 } },
+            { label: 'Put in another window', rel: 'friends', fx: { cash: -1, a: { mood: 4 }, b: { mood: 4 } } },
+          ] },
+        mature: { from: 'a', rel: 'friends', text: '{b} and I are friends now. We share custody of the desk plant. It is very mature. We are very mature.',
+          choices: [{ label: 'Proud of you both', fx: { a: { mood: 4 }, b: { mood: 4 } } }] },
+      },
+    },
+    {
+      id: 'wedding', kind: 'couple', minHours: 24,
+      beats: {
+        start: { from: 'a', text: '{b} and I are getting married! We met right here, at work. Can the whole team come?',
+          choices: [
+            { label: 'Throw an office party', reply: 'There will be cake. There will be a slideshow. There will be a conga line.', fx: { cash: -1, team: 8, a: { mood: 10, bond: 6 }, b: { mood: 10, bond: 6 } } },
+            { label: 'Give them a week off', reply: 'A honeymoon! We will send a postcard. Of the beach. Not of email.', fx: { a: { rest: 120, mood: 20 }, b: { rest: 120, mood: 20 } } },
+            { label: 'Send a nice card', reply: 'Thank you! We have stuck it on the fridge. Next to the yoghurt rules.', fx: { a: { mood: 3 }, b: { mood: 3 } } },
+          ] },
+      },
+    },
+  ];
+  // How people who get on (or do not) work together on the same project, and how it shows in their mood.
+  const RELS = {
+    crush: { name: 'Sparks with', work: -0.04, mood: 3 },
+    dating: { name: 'Dating', work: 0.12, mood: 5 },
+    friends: { name: 'Friends with', work: 0.06, mood: 2 },
+    feud: { name: 'Feuding with', work: -0.18, mood: -6 },
+    exes: { name: 'Exes with', work: -0.08, mood: -3 },
+  };
+
+  // ------------------------------------------------------------------ the market, after the IPO
+  // Random headlines that come with the bigger daily moves.
+  const STOCK_NEWS = {
+    up: ['An analyst raised their price target on {T}', '{T} joins a big index fund', 'Unusual options buying in {T}', 'A pension fund takes a large stake in {T}', '{T} named a top pick on breakfast TV', 'Short sellers cover their {T} bets'],
+    down: ['An analyst cut their price target on {T}', 'A big fund trims its {T} stake', 'Tech stocks slide on rate fears', '{T} caught in a sector sell-off', 'A rival poached a {T} sales director', 'A blogger calls {T} "overhyped"'],
+  };
+  // Market rumours you have to read. Clues arrive in the news from sources you can trust more or less; then the CFO asks
+  // what to do. What happens depends on whether the rumour is true. yes/no: clue texts that point each way.
+  // Each choice: fx (paid up front), then yes/no: what follows when the rumour is true or false (stock, cash, team mood).
+  const SOURCES = {
+    wire: { name: 'Wire report', p: 0.85, hint: 'usually right' },
+    analyst: { name: 'Analyst note', p: 0.7, hint: 'often right' },
+    team: { name: 'Your sales team', p: 0.75, hint: 'often right' },
+    forum: { name: 'Forum post', p: 0.5, hint: 'a coin toss' },
+    guru: { name: 'Finfluencer', p: 0.25, hint: 'usually wrong' },
+  };
+  const MARKET = [
+    {
+      id: 'rival', rumour: 'Rumour: Globex is about to launch a cheaper rival to Atlas', move: -0.03,
+      yes: ['Globex has booked a huge launch venue for Thursday', 'Globex job ads say "HR suite, launch-critical"', 'A Globex intern posted a teaser, then deleted it'],
+      no: ['Globex says it has "no plans in that space"', 'Globex just cancelled its developer conference', 'The "leaked screenshot" is a design student\'s mock-up'],
+      ask: 'The Globex rumour is everywhere. Do we move first? The clues are on the Investors page.',
+      choices: [
+        { label: 'Cut prices now', yes: { stock: 0.05, text: 'Globex launched, at twice our price. We look like geniuses.' }, no: { stock: -0.03, cash: -1, text: 'Globex never launched. We cut our prices for nothing.' } },
+        { label: 'Ship a new feature', fx: { cash: -0.5 }, yes: { stock: 0.03, text: 'Globex launched, but our new feature stole the headlines.' }, no: { stock: 0.01, text: 'No Globex launch. Our feature shipped anyway. Customers like it.' } },
+        { label: 'Ignore it', yes: { stock: -0.06, text: 'Globex launched and we were asleep. The Street noticed.' }, no: { stock: 0.02, text: 'Nothing happened. Calm wins.' } },
+      ],
+    },
+    {
+      id: 'takeover', rumour: 'Rumour: Initech wants to buy {T}', move: 0.06,
+      yes: ["Initech's CEO was seen in our lobby. Twice.", 'Initech just hired three merger lawyers', "Initech's CFO liked a post about {T} at 2am"],
+      no: ['Initech says it is "focused on organic growth"', "Initech's share price can barely afford a sandwich", 'The source is a parody account'],
+      ask: 'Takeover chatter is pushing our price up. What do we tell the market? Check the clues first.',
+      choices: [
+        { label: 'Say we are open to offers', yes: { stock: 0.1, text: 'Initech made an offer. Then two others did. Bidding war!' }, no: { stock: -0.08, text: 'Nobody made an offer. Now we look desperate.' } },
+        { label: 'No comment', yes: { stock: 0.03, text: 'Initech made a lowball offer. We said no. The premium stayed.' }, no: { stock: -0.03, text: 'The rumour faded. So did the premium.' } },
+        { label: 'Deny everything', yes: { stock: -0.02, text: 'Initech walked away. Some investors wanted that premium.' }, no: { stock: 0.01, text: 'Denied. Boring. The market likes boring.' } },
+      ],
+    },
+    {
+      id: 'short', rumour: 'A short seller says {T}\'s numbers are "too good to be true"', move: -0.08,
+      yes: ['An auditor quietly left last month', 'Two clients say they never got their invoices', 'The short seller was right about their last three targets'],
+      no: ['The short seller got their last two targets badly wrong', 'Every invoice ties out, says Morgan in finance', 'The report confuses revenue with "vibes"'],
+      ask: 'A short seller is attacking us. Is there anything in it? Read the clues, then tell me what to do.',
+      choices: [
+        { label: 'Publish every invoice', fx: { cash: -0.5 }, yes: { stock: -0.02, text: 'We found a typo worth $3M and fixed it in public. Investors liked the honesty.' }, no: { stock: 0.1, text: 'Every invoice checked out. The short seller deleted their post.' } },
+        { label: 'Sue them', yes: { stock: -0.1, text: 'The lawsuit found the typo. In court. In public. Ouch.' }, no: { stock: 0.08, text: 'They settled and apologised. In a very small font.' } },
+        { label: 'Stay quiet', yes: { stock: -0.05, text: 'Silence looked like guilt.' }, no: { stock: -0.01, text: 'The story died down on its own. Eventually.' } },
+      ],
+    },
+    {
+      id: 'rates', rumour: 'Markets bet on a surprise interest rate cut', move: 0.02,
+      yes: ['Three central bankers made very relaxed speeches', 'Bond yields dropped overnight', 'The central bank cancelled its usual press briefing'],
+      no: ['Inflation came in hotter than expected', 'A central banker said "patience" four times', 'The rumour started in a group chat called "Rich Soon"'],
+      ask: 'Everyone expects a rate cut. Do we buy back shares before it lands?',
+      choices: [
+        { label: 'Buy back shares now', fx: { cash: -2 }, yes: { stock: 0.07, text: 'The cut came. We bought back low. Shareholders cheered.' }, no: { stock: -0.02, text: 'No cut. We bought back at the top. Mildly embarrassing.' } },
+        { label: 'Wait for the news', yes: { stock: 0.02, text: 'The cut came. Everything rose a little, us included.' }, no: { stock: 0, text: 'No cut. We did nothing silly. Gold star.' } },
+      ],
+    },
+    {
+      id: 'viral', rumour: "Alex Rivera's 3am post about \"hustle\" is going viral", move: -0.02,
+      yes: ['The post has two million likes and a fan account', 'Business schools are quoting it', 'A pop star shared it with a heart'],
+      no: ['The replies are mostly clown faces', 'Three clients asked if Alex is okay', 'A late-night host did a whole bit about it'],
+      ask: "Alex's post is everywhere. Is the internet loving it or roasting it? Your call.",
+      choices: [
+        { label: 'Make it into merch', yes: { stock: 0.05, cash: 1, text: 'The hoodies sold out in an hour.' }, no: { stock: -0.05, text: 'Nobody wants a hoodie that says that.' } },
+        { label: 'Delete the post', yes: { stock: -0.03, text: 'The fans were upset it was gone.' }, no: { stock: 0.02, text: 'Deleted. The internet moved on by lunch.' } },
+        { label: 'Double down', yes: { stock: 0.07, text: 'Alex did a podcast tour. Brand value: up.' }, no: { stock: -0.08, text: 'Alex doubled down. The internet tripled down.' } },
+      ],
+    },
+    {
+      id: 'meme', rumour: 'Forum traders are hyping {T} "to the moon"', move: 0.1,
+      yes: ['Options volume is forty times normal', '{T} is trending above a celebrity divorce', 'A famous investor posted a rocket'],
+      no: ['The forum has moved on to a cheese company', 'Trading volume halved since this morning', 'The main hype account was suspended'],
+      ask: 'We are a meme stock now?! Will the hype last? Decide what we do with it.',
+      choices: [
+        { label: 'Sell new shares into it', yes: { cash: 3, stock: -0.02, text: 'We raised a fortune at silly prices. Thanks, internet.' }, no: { cash: 1, stock: -0.08, text: 'The hype faded mid-sale. We raised a bit and looked greedy.' } },
+        { label: 'Ride the wave', yes: { stock: 0.08, text: 'To the moon. Briefly. It was nice up there.' }, no: { stock: -0.1, text: 'The hype went somewhere else. So did the price.' } },
+        { label: 'Warn that it is hype', yes: { stock: -0.03, text: 'Honest, and slightly less rich.' }, no: { stock: 0.02, text: 'Credibility up. The crash barely touched us.' } },
+      ],
+    },
+    {
+      id: 'outage', rumour: 'Whispers of a big cloud outage tonight', move: -0.02,
+      yes: ["The cloud provider's status page says \"investigating\"", 'Engineers on the forums are posting panic memes', 'Our pager went off twice for no reason'],
+      no: ['The status page is a calm sea of green', 'The "insider" turned out to be a prank account', 'The provider just finished a big upgrade'],
+      ask: 'An outage might hit tonight. Do we move to a backup region?',
+      choices: [
+        { label: 'Move to a backup region', fx: { cash: -0.8 }, yes: { stock: 0.05, text: 'The outage hit everyone but us. Smug mode activated.' }, no: { stock: 0, text: 'No outage. We paid for a very expensive fire drill.' } },
+        { label: 'Wait and see', yes: { stock: -0.06, team: -4, text: 'The outage hit us at 2am. So did the angry emails.' }, no: { stock: 0.01, text: 'Nothing happened. Everyone slept well.' } },
+      ],
+    },
+  ];
+
   return {
     BALANCE, SIZES, LENGTHS, RARITY, PACKS, ROLES, REVIEWS, VERDICTS, ROLE_NOUN, TRAITS, TITLES, PEOPLE, CAST, RIVALS, RIVAL_LINES, LEAGUES, LEAGUE_REWARDS, CLIENTS, PROJECTS,
     OFFICE, ZONES, FUNDING, CAP_NAMES, ACQ, CAREER_TITLES, UNLOCKS, DECISIONS, IPO_DECISIONS, BANTER, IPO_BANTER, BONUSES, LOW_MOOD, GEAR, GEAR_PCT,
-    GAMES, WORDS, PINGS, FLOORS, CALLS,
+    GAMES, WORDS, PINGS, FLOORS, CALLS, SWAG, SWAG_WEIGHTS, SWAG_BOX, DRAMA, RELS, STOCK_NEWS, SOURCES, MARKET,
   };
 })();

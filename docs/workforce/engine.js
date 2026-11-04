@@ -15,6 +15,9 @@
     const OFFICE = Object.fromEntries(D.OFFICE.map(o => [o.id, o]));
     const DECISIONS = Object.fromEntries(D.DECISIONS.concat(D.IPO_DECISIONS).map(d => [d.id, d]));
     const LEGENDS = D.PEOPLE.filter(p => p.r === 5).map(p => p.id);
+    const GUESTS = D.PEOPLE.filter(p => p.guest).map(p => p.id);
+    const DRAMA = Object.fromEntries(D.DRAMA.map(d => [d.id, d]));
+    const MARKET = Object.fromEntries(D.MARKET.map(m => [m.id, m]));
     const RIVALS = Object.fromEntries(D.RIVALS.map(r => [r.id, r]));
     const MIN = 60e3, HOUR = 3600e3, DAY = 86400e3;
 
@@ -57,12 +60,15 @@
         tut: 0,
         stats: { deliveries: 0, stars: 0, five: 0, hires: 0, decisions: 0, builds: 0, panics: 0, longestAway: 0, chats: 0, commits: 0, weekWins: 0, dayStars: {}, autoDelivered: 0, refSrc: {},
           dayRevenue: {}, packs: 0, legends: 0, rushes: 0, layoffs: 0, games: 0, acquisitions: 0, beats: 0,
-          billed: 0, calls: 0, hustled: 0, minRevenue: [], bestDay: 0 },
+          billed: 0, calls: 0, hustled: 0, minRevenue: [], bestDay: 0, swag: 0, dramas: 0, calm: 0, rumoursRight: 0 },
         pity: 0, pityL: 0, pityX: 0, tickets: 0,
         shots: 3, boost: { until: 0, mult: 1 },
         hustle: { v: 0, at: 0, last: t },
         call: { at: t + 3 * MIN, from: pick(D.CLIENTS) },
-        games: { word: null, wordStreak: 0, wordLastWin: '', inboxAt: 0, stackAt: 0, best: {} },
+        games: { word: null, wordStreak: 0, wordLastWin: '', inboxAt: 0, stackAt: 0, bubbleAt: 0, zenAt: 0, best: {} },
+        swag: [], swagSeq: 1,
+        rels: {}, drama: { next: t + 30 * MIN, queue: [], recent: [], active: false },
+        market: { next: 0, ev: null, recent: [] },
         alumni: {},
         stock: null,
         settings: { stealth: false, badge: true, autopilot: true, installHint: true },
@@ -80,6 +86,29 @@
     const owned = () => Object.keys(S.staff);
     const hearts = id => Math.min(5, Math.floor(S.staff[id].bond / 20));
     const gearPct = id => S.items.reduce((a, i) => a + (i.owner === id ? i.pct : 0), 0);
+    // Swag: the one item someone wears, and how much of an effect (see D.SWAG) it gives them.
+    const swagOf = id => S.swag.find(i => i.owner === id) || null;
+    const swagFx = (id, k) => { const it = swagOf(id); return (it && D.SWAG[it.key].fx[k]) || 0; };
+    const teamSwag = (team, k) => team.reduce((a, id) => a + swagFx(id, k), 0);
+    // Relationships between two people: '', 'crush', 'dating', 'friends', 'feud' or 'exes' (see D.RELS).
+    const relKey = (a, b) => (a < b ? a + '|' + b : b + '|' + a);
+    const rel = (a, b) => (S.rels[relKey(a, b)] || {}).s || '';
+    const relsOf = id => Object.entries(S.rels).filter(([k]) => k.split('|').includes(id)).map(([k, v]) => ({ with: k.split('|').find(x => x !== id), s: v.s, at: v.at }));
+    const relMood = id => relsOf(id).reduce((a, r) => a + D.RELS[r.s].mood, 0);
+    function setRel(a, b, s) {
+      const k = relKey(a, b);
+      if (!s) delete S.rels[k];
+      else if (!S.rels[k] || S.rels[k].s !== s) S.rels[k] = { s, at: now() };
+    }
+    // Couples and friends lift a project they share; feuds and exes drag it down.
+    function pairMult(team) {
+      let m = 1;
+      for (let i = 0; i < team.length; i++) for (let j = i + 1; j < team.length; j++) {
+        const s = rel(team[i], team[j]);
+        if (s) m *= 1 + (s === 'dating' && legendOwned('cupid') ? 0.2 : D.RELS[s].work);
+      }
+      return m;
+    }
     const moodMult = m => 0.8 + 0.4 * clamp(m, 0, 100) / 100;
     const achMult = () => 1 + 0.01 * Object.keys(S.achievements).length;
     const abilityOf = id => (PEOPLE[id].ability ? PEOPLE[id].ability.id : '');
@@ -115,12 +144,16 @@
       const p = PEOPLE[id], st = S.staff[id];
       let s = B.rarityBase[p.r] * Math.pow(B.levelGrowth, st.lvl - 1) * Math.pow(B.starGrowth, st.stars)
         * (1 + gearPct(id) / 100) * (1 + B.heartBonus * hearts(id)) * moodMult(st.mood)
-        * (1 + 0.08 * lvl('servers')) * achMult();
+        * (1 + 0.08 * lvl('servers')) * achMult() * (1 + swagFx(id, 'skill'));
       if (ctx.hour !== undefined) {
-        if (has(id, 'night') && (ctx.hour >= 18 || ctx.hour < 6)) s *= 1.2;
-        if (has(id, 'early') && ctx.hour >= 6 && ctx.hour < 11) s *= 1.2;
+        const night = ctx.hour >= 18 || ctx.hour < 6, early = ctx.hour >= 6 && ctx.hour < 11;
+        if (has(id, 'night') && night) s *= 1.2;
+        if (has(id, 'early') && early) s *= 1.2;
+        if (night) s *= 1 + swagFx(id, 'night');
+        if (early) s *= 1 + swagFx(id, 'early');
       }
       if (ctx.solo && has(id, 'lone')) s *= 1.35;
+      if (ctx.solo) s *= 1 + swagFx(id, 'solo');
       return s;
     }
 
@@ -130,7 +163,7 @@
     }
     function moodBaseline(id) {
       const st = S.staff[id];
-      return clamp(50 + comfort(id) + 2 * hearts(id) - 2.5 * st.fatigue - (has(id, 'work') ? 5 : 0) + (legendOwned('morale') ? 10 : 0), 5, 100);
+      return clamp(50 + comfort(id) + 2 * hearts(id) - 2.5 * st.fatigue - (has(id, 'work') ? 5 : 0) + (legendOwned('morale') ? 10 : 0) + swagFx(id, 'mood') + relMood(id), 5, 100);
     }
 
     const difficulty = (tier, size) => B.diffBase * Math.pow(B.diffGrowth, tier - 1) * D.SIZES[size].diff;
@@ -138,7 +171,7 @@
     const baseCash = (tier, size, stars) => B.cashBase * Math.pow(B.cashGrowth, tier - 1) * D.SIZES[size].reward * B.starMult[stars - 1];
     const cashFor = (tier, size, stars) => baseCash(tier, size, stars) * cashMult();
     // What one project pays on top of that: length, rainmakers, VIP clients, Zara.
-    const projectMult = (offer, team) => Math.pow(offer.m || 1, 0.92) * (1 + 0.15 * team.filter(id => has(id, 'rain')).length) * (offer.vip ? 1.5 : 1) * (onTeam(team, 'midas') ? 2 : 1);
+    const projectMult = (offer, team) => Math.pow(offer.m || 1, 0.92) * (1 + 0.15 * team.filter(id => has(id, 'rain')).length + teamSwag(team, 'rain')) * (offer.vip ? 1.5 : 1) * (onTeam(team, 'midas') ? 2 : 1);
     const xpFor = (size, stars, tier = 1) => B.xpPerReward * D.SIZES[size].reward * B.starMult[stars - 1] * (1 + 0.1 * (tier - 1)) * (1 + 0.15 * lvl('library')) * (legendOwned('masterclass') ? 1.4 : 1);
     const repFor = (tier, size, stars) => stars * Math.pow(D.SIZES[size].reward, 0.85) * (1 + 0.12 * (tier - 1));
     // A typical Sprint payout at your current level; decisions are priced in these.
@@ -183,13 +216,18 @@
       const hour = new Date(t).getHours();
       const avail = available(t).sort((a, b) => skill(b, { hour, solo: n === 1 }) - skill(a, { hour, solo: n === 1 }));
       const team = [];
+      // People who are feuding (or have just broken up) only share a project when nobody else is free.
+      const clash = x => team.some(y => ['feud', 'exes'].includes(rel(x, y)));
       for (const role of offer.needs) {
-        const id = avail.find(x => PEOPLE[x].role === role && !team.includes(x));
+        const fits = x => PEOPLE[x].role === role && !team.includes(x);
+        const id = avail.find(x => fits(x) && !clash(x)) || avail.find(fits);
         if (id && team.length < n) team.push(id);
       }
-      for (const id of avail) {
-        if (team.length >= n) break;
-        if (!team.includes(id)) team.push(id);
+      for (const any of [false, true]) {
+        for (const id of avail) {
+          if (team.length >= n) break;
+          if (!team.includes(id) && (any || !clash(id))) team.push(id);
+        }
       }
       return team.length === n ? team : null;
     }
@@ -199,7 +237,7 @@
       const solo = team.length === 1;
       const sum = team.reduce((a, id) => a + skill(id, { hour, solo }), 0);
       const covered = offer.needs.filter(r => team.some(id => PEOPLE[id].role === r)).length;
-      const T = sum * (1 + 0.25 * covered);
+      const T = sum * (1 + 0.25 * covered) * pairMult(team);
       const Dv = difficulty(offer.tier, offer.size);
       let mean = 3 + 1.5 * Math.log2(T / Dv);
       if (team.some(id => has(id, 'perfect'))) mean += 0.3;
@@ -222,7 +260,7 @@
       if (!team) return null;
       const f = forecast(offer, team, t);
       const speed = team.filter(id => has(id, 'speed')).length;
-      const dur = offer.dur * Math.max(0.8, 1 - 0.08 * speed) * (onTeam(team, 'tireless') ? 0.75 : 1);
+      const dur = offer.dur * Math.max(0.8, 1 - 0.08 * speed) * (onTeam(team, 'tireless') ? 0.75 : 1) * (1 - teamSwag(team, 'speed'));
       // Ife sometimes hands over a finished project the moment it starts.
       const instant = !offer.tut && onTeam(team, 'warp') && rand() < 0.2;
       // bill: what the project bills while it runs (in baseCash units); billedBase/billed: how much so far.
@@ -243,6 +281,7 @@
       if (onTeam(w.team, 'fixer')) stars = Math.max(stars, 3);
       if (stars < 5 && w.team.some(id => has(id, 'lucky')) && rand() < 0.15) stars++;
       if (stars < 5 && onTeam(w.team, 'golden') && rand() < 0.3) stars++;
+      if (stars < 5 && rand() < teamSwag(w.team, 'lucky')) stars++;
       return stars;
     }
 
@@ -265,10 +304,11 @@
       for (const id of team) {
         const st = S.staff[id];
         const before = st.lvl;
-        gainXp(id, xpFor(offer.size, stars, offer.tier) * lenMult * (1 + 0.25 * mentors(id)));
+        gainXp(id, xpFor(offer.size, stars, offer.tier) * lenMult * (1 + 0.25 * mentors(id)) * (1 + swagFx(id, 'xp')));
         if (st.lvl > before) levelups.push({ id, from: before, to: st.lvl });
         st.mood = clamp(st.mood + [-6, -3, 0, 3, 6][stars - 1] - (stars <= 2 && has(id, 'perfect') ? 4 : 0), 0, 100);
         if (team.some(x => x !== id && has(x, 'social'))) st.mood = clamp(st.mood + 4, 0, 100);
+        st.mood = clamp(st.mood + teamSwag(team.filter(x => x !== id), 'social'), 0, 100);
         if (abilityOf(id) !== 'tireless') st.fatigue = Math.min(12, st.fatigue + size.fatigue * Math.sqrt(offer.m || 1) * (has(id, 'work') ? 0.5 : 1));
         if (stars >= 4) st.bond = Math.min(100, st.bond + 2);
         st.delivered++;
@@ -387,10 +427,44 @@
       return item;
     }
 
+    // ---------------------------------------------------------------- swag
+    const swagCost = () => D.SWAG_BOX.price * refCash();
+    function openSwag() {
+      if (!unlocked('swag')) return null;
+      const cost = swagCost();
+      if (S.cash < cost) return { error: 'funds' };
+      spend(cost);
+      const w = D.SWAG_WEIGHTS;
+      let roll = rand() * w.reduce((a, b) => a + b, 0), r = 0;
+      for (; r < w.length - 1; r++) { roll -= w[r]; if (roll <= 0) break; }
+      const item = { id: S.swagSeq++, key: pick(Object.keys(D.SWAG).filter(k => D.SWAG[k].r === r)), owner: null };
+      S.swag.push(item);
+      S.stats.swag++;
+      checkAchievements();
+      return item;
+    }
+    // Give an item to someone (or take it back with no one). Whatever they wore before goes back in the drawer.
+    function equipSwag(itemId, personId) {
+      const it = S.swag.find(i => i.id === itemId);
+      if (!it || (personId && !S.staff[personId])) return false;
+      const before = it.owner;
+      for (const other of S.swag) if (personId && other.owner === personId) other.owner = null;
+      it.owner = personId || null;
+      if (personId && personId !== before) message({ kind: 'chat', from: personId, text: D.SWAG[it.key].say, reactions: true });
+      return true;
+    }
+
     // ---------------------------------------------------------------- hiring (blind boxes)
 
-    // One Legend is featured each week: half of all Legend pulls are them.
-    const featured = (t = now()) => LEGENDS[Math.floor(Math.round(weekStart(t) / DAY) / 7) % LEGENDS.length];
+    // Guests rotate through the hiring pool: four each week, three of them new, so the pool keeps changing.
+    const weekNo = t => Math.floor(Math.round(weekStart(t) / DAY) / 7);
+    function guestsAt(t = now()) {
+      const n = GUESTS.length, start = (weekNo(t) * 3) % n;
+      return Array.from({ length: Math.min(4, n) }, (_, i) => GUESTS[(start + i) % n]);
+    }
+    const inPool = (id, t = now()) => !PEOPLE[id].guest || guestsAt(t).includes(id);
+    // One Legend in the pool is featured each week: half of all Legend pulls are them.
+    const featured = (t = now()) => { const pool = LEGENDS.filter(id => inPool(id, t)); return pool[weekNo(t) % pool.length]; };
     const rarityWeights = () => D.RARITY.map((r, i) => r.weight * (i >= 2 ? 1 + 0.15 * lvl('recruit') : 1));
     // Pity: Staff or better within 25 CVs, Principal or better within 60, a Legend within 70.
     function rollRarity(min = 0) {
@@ -406,7 +480,7 @@
       S.pity = r >= 3 ? 0 : S.pity + 1;
       S.pityL = r >= 4 ? 0 : S.pityL + 1;
       S.pityX = r === 5 ? 0 : S.pityX + 1;
-      const id = r === 5 ? (rand() < 0.5 ? featured() : pick(LEGENDS)) : pick(D.PEOPLE.filter(x => x.r === r)).id;
+      const id = r === 5 ? (rand() < 0.5 ? featured() : pick(LEGENDS.filter(x => inPool(x)))) : pick(D.PEOPLE.filter(x => x.r === r && inPool(x.id))).id;
       const p = PEOPLE[id];
       const st = S.staff[id];
       if (!st) {
@@ -463,22 +537,28 @@
     // Wall Street, of course, loves it. Some come back later as clients.
     function letGo(id) {
       if (letGoBlock(id)) return null;
-      const p = PEOPLE[id];
       const refs = severance(id);
-      const t = now();
-      for (const it of S.items.filter(i => i.owner === id)) earn(it.pct * refCash() * 0.01);
-      S.items = S.items.filter(i => i.owner !== id);
-      delete S.staff[id];
-      for (const m of S.inbox) if (m.from === id && m.choices && !m.done) m.done = { expired: true, at: t };
-      for (const o of owned()) S.staff[o].mood = clamp(S.staff[o].mood - 6, 0, 100);
+      depart(id);
       addRefs(refs, 'severance');
-      S.alumni[id] = { at: t, startup: t + (6 + rand() * 24) * HOUR };
       S.stats.layoffs++;
-      message({ kind: 'chat', from: id, text: p.bye, farewell: true });
-      addLog(`${p.name} left the company`, 'bad');
       kick(0.02, 'Atlas announces a restructuring');
       checkAchievements();
       return { refs };
+    }
+    // Someone leaves the team: their gear is sold, their swag goes back in the drawer, their relationships end.
+    function depart(id) {
+      const p = PEOPLE[id];
+      const t = now();
+      for (const it of S.items.filter(i => i.owner === id)) earn(it.pct * refCash() * 0.01);
+      S.items = S.items.filter(i => i.owner !== id);
+      for (const it of S.swag) if (it.owner === id) it.owner = null;
+      for (const r of relsOf(id)) setRel(id, r.with, '');
+      delete S.staff[id];
+      for (const m of S.inbox) if (m.from === id && m.choices && !m.done) m.done = { expired: true, at: t };
+      for (const o of owned()) S.staff[o].mood = clamp(S.staff[o].mood - 6, 0, 100);
+      S.alumni[id] = { at: t, startup: t + (6 + rand() * 24) * HOUR };
+      message({ kind: 'chat', from: id, text: p.bye, farewell: true });
+      addLog(`${p.name} left the company`, 'bad');
     }
     function processAlumni(t) {
       for (const [id, a] of Object.entries(S.alumni)) {
@@ -705,7 +785,7 @@
       if (!unlocked('breaks')) return [];
       const out = [];
       if (!wordState(t).done) out.push('word');
-      for (const k of ['inbox', 'stack']) if (t >= gameReadyAt(k)) out.push(k);
+      for (const k of ['inbox', 'stack', 'bubble', 'zen']) if (t >= gameReadyAt(k)) out.push(k);
       return out;
     }
     // inbox: points scored. stack: floors built. Every round counts for your best score; the reward
@@ -716,12 +796,22 @@
       if (!g || !g.cooldown) return null;
       const best = score > (S.games.best[kind] || 0);
       if (best) S.games.best[kind] = score;
-      const tier = g.tiers.filter(x => score >= x).length;
+      const tier = g.tiers ? g.tiers.filter(x => score >= x).length : 0;
       if (t < gameReadyAt(kind)) { checkAchievements(); return { cooldown: true, best, tier }; }
+      // A calm game pays only once it is finished (a whole sheet popped, a garden raked); there is nothing to lose.
+      if (g.calm && score < g.goal) return { best, tier, short: true };
       S.games[kind + 'At'] = t + g.cooldown * MIN;
       S.stats.games++;
       let reward;
-      if (kind === 'inbox') {
+      if (g.calm) {
+        for (const id of owned()) {
+          const st = S.staff[id];
+          st.mood = clamp(st.mood + g.mood, 0, 100);
+          if (kind === 'zen') st.fatigue = Math.max(0, st.fatigue - 1);
+        }
+        S.stats.calm++;
+        reward = { mood: g.mood };
+      } else if (kind === 'inbox') {
         S.shots = Math.min(shotCap() + 3, S.shots + tier);
         reward = { shots: tier };
       } else {
@@ -738,7 +828,7 @@
       const t = now();
       if (!st || t - st.lastChat < 4 * HOUR) return null;
       st.lastChat = t;
-      st.bond = Math.min(100, st.bond + 6 * (1 + 0.25 * lvl('games')));
+      st.bond = Math.min(100, st.bond + 6 * (1 + 0.25 * lvl('games')) * (1 + swagFx(id, 'bond')));
       st.mood = clamp(st.mood + 8, 0, 100);
       S.stats.chats++;
       checkAchievements();
@@ -748,9 +838,9 @@
     // ---------------------------------------------------------------- office
 
     const zoneOpen = z => S.funding >= D.ZONES[z].funding;
-    function buildCost(id) { const o = OFFICE[id]; return o.cost[0] * Math.pow(o.cost[1], lvl(id)); }
+    function buildCost(id) { const o = OFFICE[id]; return o.cost[0] * Math.pow(o.cost[1], lvl(id)) * (legendOwned('builder') ? 0.8 : 1); }
     // The first coffee bar is a tutorial step, so it takes seconds.
-    function buildTime(id) { const o = OFFICE[id]; return S.tut >= 0 && id === 'coffee' && !lvl(id) ? 8 : Math.min(o.time[0] * Math.pow(o.time[1], lvl(id)), 8 * 3600); }
+    function buildTime(id) { const o = OFFICE[id]; return S.tut >= 0 && id === 'coffee' && !lvl(id) ? 8 : Math.min(o.time[0] * Math.pow(o.time[1], lvl(id)), 8 * 3600) * (legendOwned('builder') ? 0.5 : 1); }
     function buildBlock(id) {
       const o = OFFICE[id];
       if (!zoneOpen(o.zone)) return `Opens at ${D.FUNDING[D.ZONES[o.zone].funding].name}`;
@@ -789,7 +879,12 @@
 
     // ---------------------------------------------------------------- messages
 
+    // The share ticker is made from the player's name: Josh trades as JOSH. Without a usable name it stays ATLS.
+    const tickerFor = name => { const l = String(name || '').toUpperCase().replace(/[^A-Z]/g, ''); return l.length >= 2 ? l.slice(0, 4) : 'ATLS'; };
+    const ticker = () => tickerFor(S.name);
+    const fillT = s => String(s).replace(/\{T\}/g, ticker());
     function message(m) {
+      if (m.text) m.text = fillT(m.text);
       m.id = S.msgSeq++;
       m.at = m.at || now();
       m.read = false;
@@ -851,6 +946,8 @@
       return ch && ch.fx && ch.fx.cash < 0 ? -ch.fx.cash * refCash() : 0;
     }
     function choiceOf(m, idx) {
+      if (m.kind === 'drama') { const arc = DRAMA[m.arc]; return arc && arc.beats[m.beat] && arc.beats[m.beat].choices[idx]; }
+      if (m.kind === 'market') return MARKET[m.tpl] && MARKET[m.tpl].choices[idx];
       if (m.tpl === 'lowmood') return D.LOW_MOOD.choices[idx];
       if (m.kind === 'bonus') return { fx: m.fx, reply: '' };
       if (m.kind === 'commit') return { fx: {}, reply: '' };
@@ -894,8 +991,10 @@
       if (!ch) return null;
       const cost = choiceCost(m, idx);
       if (cost > S.cash) return { error: 'funds' };
-      applyFx(ch.fx, m.from, ch.reply && `“${ch.reply}”`);
-      m.done = { idx, at: now(), reply: ch.reply || '' };
+      if (m.kind === 'drama') return answerDrama(m, ch, idx);
+      if (m.kind === 'market') return answerMarket(m, ch, idx);
+      applyFx(ch.fx, m.from, ch.reply && `“${fillT(ch.reply)}”`);
+      m.done = { idx, at: now(), reply: fillT(ch.reply || '') };
       m.read = true;
       if (ch.risk) S.risks.push({ msg: m.id, from: m.from, at: now() + ch.risk.delay * MIN, risk: ch.risk });
       if (m.kind === 'decision') S.stats.decisions++;
@@ -914,15 +1013,102 @@
       if (!due.length) return;
       S.risks = S.risks.filter(r => t < r.at);
       for (const r of due) {
+        if (r.market) { resolveMarket(r); continue; }
         const win = rand() < r.risk.p;
         const o = win ? r.risk.win : r.risk.lose;
         applyFx(o.fx, r.from, `“${o.text}”`);
         message({ kind: 'outcome', from: r.from, text: o.text, good: win, ref: r.msg, at: r.at });
       }
     }
+    // ---------------------------------------------------------------- office drama
+    const firstName = id => (PEOPLE[id] ? PEOPLE[id].name.split(' ')[0] : 'Someone');
+    // Who a story is about: two people who suit its kind (see D.DRAMA), and a third to tell it when it needs one.
+    function castFor(arc, t) {
+      const pool = workers().filter(id => !resting(id, t));
+      const taken = id => relsOf(id).some(r => r.s === 'dating' || r.s === 'crush');
+      const pairs = [];
+      for (let i = 0; i < pool.length; i++) for (let j = i + 1; j < pool.length; j++) {
+        const a = pool[i], b = pool[j], s = rel(a, b);
+        if (arc.kind === 'romance' ? !s && !taken(a) && !taken(b)
+          : arc.kind === 'feud' ? s !== 'dating' && s !== 'feud'
+            : arc.kind === 'couple' ? s === 'dating' && t - S.rels[relKey(a, b)].at >= (arc.minHours || 0) * HOUR
+              : true) pairs.push([a, b]);
+      }
+      if (!pairs.length) return null;
+      const [a, b] = shuffle(pick(pairs));
+      return { a, b, c: pick(pool.filter(x => x !== a && x !== b)) || null };
+    }
+    function startDrama(t) {
+      const arcs = shuffle(D.DRAMA.filter(d => !S.drama.recent.includes(d.id) && !(d.id === 'breakup' && legendOwned('cupid'))));
+      // Stories about couples come first when there is one: they are rarer.
+      arcs.sort((x, y) => (y.kind === 'couple') - (x.kind === 'couple'));
+      for (const arc of arcs) {
+        if (arc.kind === 'couple' && rand() < 0.5) continue;
+        const cast = castFor(arc, t);
+        if (!cast) continue;
+        S.drama.recent = [arc.id, ...S.drama.recent].slice(0, 6);
+        S.drama.active = true;
+        return dramaBeat(arc.id, 'start', cast, t);
+      }
+      S.drama.next = t + 30 * MIN;
+      return null;
+    }
+    function fillCast(s, cast) {
+      const name = id => (id && S.staff[id] ? firstName(id) : 'someone');
+      return fillT(s).replace(/\{a\}/g, name(cast.a)).replace(/\{b\}/g, name(cast.b)).replace(/\{c\}/g, name(cast.c));
+    }
+    function dramaBeat(arcId, beatId, cast, t) {
+      const arc = DRAMA[arcId];
+      let beat = arc.beats[beatId];
+      for (const [id, alt] of Object.entries(beat.ifOwned || {})) if (S.staff[id]) { beatId = alt; beat = arc.beats[alt]; break; }
+      // Someone in the story has left since it started: it ends there.
+      if (!S.staff[cast.a] || !S.staff[cast.b]) { endDrama(t); return null; }
+      if (beat.rel !== undefined) setRel(cast.a, cast.b, beat.rel);
+      const from = beat.from === 'a' || beat.from === 'b' ? cast[beat.from] : beat.from === 'c' ? (cast.c && S.staff[cast.c] ? cast.c : 'bot') : beat.from;
+      return message({ kind: 'drama', from, arc: arcId, beat: beatId, cast, text: fillCast(beat.text, cast), choices: beat.choices.map(c => fillCast(c.label, cast)), exp: t + 4 * HOUR, at: t });
+    }
+    function answerDrama(m, ch, idx) {
+      const t = now(), cast = m.cast, fx = ch.fx || {};
+      if (fx.cash) applyFx({ cash: fx.cash });
+      for (const k of ['a', 'b', 'c']) if (fx[k] && cast[k] && S.staff[cast[k]]) applyFx(fx[k], cast[k]);
+      if (fx.team) applyFx({ teamMood: fx.team });
+      if (ch.rel !== undefined) setRel(cast.a, cast.b, ch.rel);
+      m.done = { idx, at: t, reply: fillCast(ch.reply || '', cast) };
+      m.read = true;
+      S.stats.dramas++;
+      // Quitting over it: only if the team can spare them right now; otherwise they stay, unhappy.
+      if (ch.leave && S.staff[cast[ch.leave]]) {
+        const id = cast[ch.leave];
+        if (letGoBlock(id)) applyFx({ mood: -20, bond: -10 }, id);
+        else depart(id);
+      }
+      const nx = ch.next;
+      const romance = DRAMA[m.arc].kind === 'romance';
+      const beat = !nx ? '' : nx.beat || (rand() < (romance && legendOwned('cupid') ? 1 : nx.p) ? nx.win : nx.lose);
+      if (beat) S.drama.queue.push({ arc: m.arc, beat, cast, at: t + (nx.delay || 20) * MIN });
+      else endDrama(t);
+      checkAchievements();
+      return { reply: m.done.reply, pending: !!beat };
+    }
+    function endDrama(t) {
+      S.drama.active = false;
+      S.drama.next = t + (40 + rand() * 50) * MIN;
+    }
+    function processDrama(t) {
+      if (S.tut !== -1 || !unlocked('drama')) return;
+      const due = S.drama.queue.filter(q => t >= q.at);
+      S.drama.queue = S.drama.queue.filter(q => t < q.at);
+      for (const q of due) dramaBeat(q.arc, q.beat, q.cast, q.at);
+      if (!S.drama.active && !S.drama.queue.length && t >= S.drama.next && workers().length >= 2 && pendingDecisions().length < 3) startDrama(t);
+    }
+
     function expireMessages(t) {
       for (const m of S.inbox) {
-        if (m.choices && !m.done && m.exp && t > m.exp) m.done = { expired: true, at: m.exp };
+        if (!m.choices || m.done || !m.exp || t <= m.exp) continue;
+        m.done = { expired: true, at: m.exp };
+        // An unanswered story fizzles out; an unanswered rumour gets decided by the market.
+        if (m.kind === 'drama') endDrama(m.exp);
+        if (m.kind === 'market') S.risks.push({ msg: m.id, from: 'cfo', at: m.exp, market: { id: m.tpl, idx: -1, truth: m.truth } });
       }
     }
 
@@ -945,7 +1131,7 @@
           if (c.ipo) {
             const drop = [0.03, 0.07, 0.12][c.tier] * (legendOwned('oracle') ? 0.5 : 1);
             kick(-drop, `Atlas misses ${commitName(c.tier, c).toLowerCase()} guidance`);
-            message({ kind: 'dana', from: 'cfo', text: `Earnings call: we missed guidance (${c.progress} of ${c.target} deliveries). ATLS −${Math.round(drop * 100)}%. The analysts were… not kind. New quarter, new chance.` });
+            message({ kind: 'dana', from: 'cfo', text: `Earnings call: we missed guidance (${c.progress} of ${c.target} deliveries). ${ticker()} −${Math.round(drop * 100)}%. The analysts were… not kind. New quarter, new chance.` });
           } else message({ kind: 'dana', from: 'dana', text: `Yesterday's commitment (${commitName(c.tier, c)}: ${c.target} deliveries) ended at ${c.progress}. No reward this time. New day, new target.` });
           S.streak = 0;
         }
@@ -963,7 +1149,7 @@
         const choices = targets.map((n, i) => `${commitName(i)}: ${n} deliveries`);
         const d = new Date(t);
         const midnight = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1).getTime();
-        if (ipoDay) message({ kind: 'commit', from: 'cfo', text: "Morning! What guidance do we give Wall Street today? Beat it and ATLS pops. Miss it and… let's not miss it.", choices, exp: midnight });
+        if (ipoDay) message({ kind: 'commit', from: 'cfo', text: "Morning! What guidance do we give Wall Street today? Beat it and {T} pops. Miss it and… let's not miss it.", choices, exp: midnight });
         else message({ kind: 'commit', from: 'dana', text: "Morning! What are we committing to today? Hit it and you're rewarded. Miss it and you get nothing.", choices, exp: midnight });
       }
     }
@@ -973,8 +1159,8 @@
       c.tier = tier;
       c.target = c.targets[tier];
       const m = S.inbox.find(x => x.kind === 'commit' && !x.done);
-      const replies = c.ipo ? ['Prudent. The Street likes no surprises.', "In line it is. Let's not disappoint.", 'Aggressive?! Bold. If we beat this, ATLS flies.'] : ['Sensible. Steady wins.', 'Ambitious. I like it.', "Moonshot?! Bold. Let's go."];
-      if (m) m.done = { idx: tier, at: now(), reply: replies[tier] };
+      const replies = c.ipo ? ['Prudent. The Street likes no surprises.', "In line it is. Let's not disappoint.", 'Aggressive?! Bold. If we beat this, {T} flies.'] : ['Sensible. Steady wins.', 'Ambitious. I like it.', "Moonshot?! Bold. Let's go."];
+      if (m) m.done = { idx: tier, at: now(), reply: fillT(replies[tier]) };
       if (c.progress >= c.target) payCommit();
       return { tier };
     }
@@ -994,8 +1180,8 @@
       if (c.ipo) {
         const pop = [0.04, 0.08, 0.15][c.tier];
         S.stats.beats++;
-        kick(pop, `Atlas beats ${commitName(c.tier).toLowerCase()} guidance`);
-        message({ kind: 'dana', from: 'cfo', text: `Earnings call: we beat ${commitName(c.tier).toLowerCase()} guidance! ATLS +${Math.round(pop * 100)}%. ${refsText} and a budget bonus.` });
+        kick(pop, `${ticker()} beats ${commitName(c.tier).toLowerCase()} guidance`);
+        message({ kind: 'dana', from: 'cfo', text: `Earnings call: we beat ${commitName(c.tier).toLowerCase()} guidance! ${ticker()} +${Math.round(pop * 100)}%. ${refsText} and a budget bonus.` });
       } else message({ kind: 'dana', from: 'dana', text: `Commitment hit: ${commitName(c.tier)}! ${refsText} and a budget bonus.` });
       emit('commit', { tier: c.tier, streak: S.streak });
       checkAchievements();
@@ -1119,27 +1305,28 @@
     const capStep = i => [1, 2.5, 5][i % 3] * Math.pow(10, Math.floor(i / 3));
     const capName = i => (i % 3 === 0 && D.CAP_NAMES[i / 3]) || '';
 
-    function addNews(pct, text) {
+    // src: where a rumour's clue came from (see D.SOURCES); rumour: the headline that starts one.
+    function addNews(pct, text, at = now(), src, rumour) {
       const st = S.stock;
-      st.feed.unshift({ t: now(), pct, text });
-      if (st.feed.length > 12) st.feed.length = 12;
+      st.feed.unshift({ t: at, pct, text: fillT(text), src, rumour });
+      if (st.feed.length > 16) st.feed.length = 16;
     }
-    function kick(pct, text) {
+    function kick(pct, text, at, rumour) {
       const st = S.stock;
       if (!st) return;
       st.news = clamp(st.news + Math.log(1 + pct), -1.2, 1.2);
       st.price = priceAt(now());
-      addNews(pct, text);
+      addNews(pct, text, at, undefined, rumour);
     }
 
     function ipo() {
       const t = now();
       const st = S.stock = {
-        ticker: 'ATLS', shares: Math.max(fairValue(t), 1) / 20, news: 0, noise: 0, price: 20, open: 20, close: 20, day: dayKey(t), ath: 20,
+        ticker: ticker(), shares: Math.max(fairValue(t), 1) / 20, news: 0, noise: 0, vol: B.stockVol, micro: 0, price: 20, open: 20, close: 20, day: dayKey(t), ath: 20,
         ipoAt: t, ipoPrice: 20, last: t, hist: [[t, 20]], days: [], feed: [], splits: 0, capIdx: 0,
         brand: 0, synergy: 0, acq: 0, acqBase: Math.max(1, trailingRevenue(t)),
       };
-      kick(0.15, 'ATLS opens 15% above its listing price');
+      kick(0.15, '{T} opens 15% above its listing price');
       st.open = st.close = st.ath = st.price;
       while (capStep(st.capIdx) <= marketCap()) st.capIdx++;
       S.unlocked.ipo = true;
@@ -1149,10 +1336,28 @@
       checkAchievements();
     }
 
+    // Weekdays 9:30 to 16:00 local time. Outside those hours the price still moves, but less.
+    const marketOpen = t => { const d = new Date(t), h = d.getHours() + d.getMinutes() / 60; return d.getDay() >= 1 && d.getDay() <= 5 && h >= 9.5 && h < 16; };
+    // One 10-minute step of the price. Volatility clusters (GARCH: a big move makes the next ones bigger, then it
+    // settles back to B.stockVol), trading hours are busier, and now and then the price jumps on a headline.
+    // Jumps go into news, so they fade slowly.
+    function stockStep(st, at) {
+      const v = st.vol || B.stockVol, last = (st.lastMove || 0) / (marketOpen(at - 10 * MIN) ? 1 : 0.35);
+      st.vol = clamp(Math.sqrt(0.02 * B.stockVol * B.stockVol + 0.08 * last * last + 0.9 * v * v), 0.004, 0.04);
+      const move = st.vol * (marketOpen(at) ? 1 : 0.35) * gauss();
+      st.lastMove = move;
+      st.noise = st.noise * 0.97 + move;
+      if (rand() < 0.004) {
+        const size = (rand() < 0.5 ? -1 : 1) * (0.03 + 0.05 * rand());
+        st.news = clamp(st.news + Math.log(1 + size), -1.2, 1.2);
+        addNews(size, pick(D.STOCK_NEWS[size > 0 ? 'up' : 'down']), at);
+      }
+    }
     // The market moves in 10-minute steps, including while you're away; the chart keeps the last 24 hours.
     function updateStock(t) {
       const st = S.stock;
       if (!st) return;
+      st.ticker = ticker();
       const STEP = 10 * MIN;
       const steps = Math.floor((t - st.last) / STEP);
       const n = Math.min(steps, 7 * 144);
@@ -1160,9 +1365,9 @@
       // While you were away the fundamentals are drawn as a smooth path from the last price to today's.
       const fairNow = fairValue(t) / st.shares, fairThen = st.fair || fairNow, t0 = st.fairAt || from;
       for (let k = 1; k <= n; k++) {
-        st.noise = st.noise * 0.95 + 0.012 * gauss();
-        st.news *= 0.9976;
         const at = from + k * STEP;
+        stockStep(st, at);
+        st.news *= 0.9976;
         if (k > n - 144) recordPrice(at, fairThen * Math.pow(fairNow / fairThen, clamp((at - t0) / Math.max(1, t - t0), 0, 1)), true);
       }
       if (steps > 0) st.last += steps * STEP;
@@ -1175,15 +1380,18 @@
         st.hist.forEach(h => { h[1] /= 10; });
         st.days.forEach(d => { d[1] /= 10; });
         st.splits++;
-        message({ kind: 'dana', from: 'cfo', text: `10-for-1 stock split! Every ATLS share just became ten shares at ${money(st.price)} each. Same value, more shares, very good vibes.` });
+        message({ kind: 'dana', from: 'cfo', text: `10-for-1 stock split! Every {T} share just became ten shares at ${money(st.price)} each. Same value, more shares, very good vibes.` });
         addNews(0, '10-for-1 stock split');
       }
       while (marketCap() >= capStep(st.capIdx)) capReward(st.capIdx++);
     }
     function recordPrice(at, fair, point) {
       const st = S.stock;
-      const price = fair * Math.exp(st.news + st.noise);
+      // While you watch, the price also wiggles second by second (micro), the way a real ticker does.
+      if (!point) st.micro = (st.micro || 0) * 0.97 + 0.0012 * gauss() * (marketOpen(at) ? 1 : 0.4);
       const dk = dayKey(at);
+      if (st.day !== dk) st.noise += 0.015 * gauss(); // overnight news: the next day opens with a gap
+      const price = fair * Math.exp(st.news + st.noise + (point ? 0 : st.micro || 0));
       if (st.day !== dk) {
         st.days.push([st.day, st.close]);
         if (st.days.length > 60) st.days.shift();
@@ -1205,7 +1413,7 @@
       st.brand += 0.05;
       if (legend) S.tickets++;
       else addRefs(5, 'market cap');
-      message({ kind: 'milestone', from: 'ceo', text: `${name ? name + '! ' : ''}ATLS just passed a ${money(capStep(i))} market cap. ${legend ? 'A headhunter found us another Legend.' : 'Five referrals for the hiring fair.'} Brand value: revenue +5% for good.` });
+      message({ kind: 'milestone', from: 'ceo', text: `${name ? name + '! ' : ''}{T} just passed a ${money(capStep(i))} market cap. ${legend ? 'A headhunter found us another Legend.' : 'Five referrals for the hiring fair.'} Brand value: revenue +5% for good.` });
       addLog(`${money(capStep(i))} market cap`, 'good');
       emit('marketcap', { i, cap: capStep(i), name, legend });
       checkAchievements();
@@ -1227,11 +1435,65 @@
       S.stock.acq++;
       S.stock.synergy += tg.boost;
       S.stats.acquisitions++;
-      kick(0.05, `Atlas acquires ${tg.name}`);
+      kick(0.05, `{T} acquires ${tg.name}`);
       message({ kind: 'dana', from: 'ceo', text: `We just bought ${tg.name}, the ${tg.sector} company from ${tg.city}! Their customers are ours now: revenue +15% for good.` });
       addLog(`Acquired ${tg.name}`, 'good');
       checkAchievements();
       return tg;
+    }
+
+    // ---------------------------------------------------------------- market rumours (after the IPO)
+    // A rumour moves the price, three clues arrive in the news from sources of different reliability, and the CFO
+    // asks what to do. The truth decides how each choice plays out; Warren Oakes, if he is on the team, knows it.
+    function startRumour(t) {
+      const tpl = pick(D.MARKET.filter(m => !S.market.recent.includes(m.id)));
+      const truth = rand() < 0.5;
+      S.market.recent = [tpl.id, ...S.market.recent].slice(0, 4);
+      kick(tpl.move * (truth ? 1 : 0.6), 'Rumour: ' + tpl.rumour.replace(/^Rumour: /, ''), t, true);
+      const yes = shuffle(tpl.yes), no = shuffle(tpl.no);
+      const clues = shuffle(Object.keys(D.SOURCES)).slice(0, 3).map((src, i) => {
+        const right = rand() < D.SOURCES[src].p;
+        return { at: t + [1, 5, 11][i] * MIN, src, text: (right === truth ? yes : no)[i] };
+      });
+      S.market.ev = { id: tpl.id, truth, start: t, clues, asked: false };
+    }
+    function processMarket(t) {
+      const mk = S.market;
+      if (!S.stock || S.tut !== -1) return;
+      const ev = mk.ev;
+      if (!ev) {
+        if (!mk.next) mk.next = t + 45 * MIN;
+        if (t >= mk.next) startRumour(t);
+        return;
+      }
+      for (const c of ev.clues) if (!c.shown && t >= c.at) { c.shown = true; addNews(0, c.text, c.at, c.src); }
+      if (!ev.asked && t >= ev.start + 3 * MIN) {
+        ev.asked = true;
+        const read = legendOwned('oracle') ? ` Warren says: "It's ${ev.truth ? 'true' : 'nonsense'}. Trust me."` : '';
+        message({ kind: 'market', from: 'cfo', tpl: ev.id, truth: ev.truth, text: MARKET[ev.id].ask + read, choices: MARKET[ev.id].choices.map(c => c.label), exp: ev.start + 3 * HOUR, at: ev.start + 3 * MIN });
+      }
+    }
+    function answerMarket(m, ch, idx) {
+      const t = now();
+      if (ch.fx) applyFx(ch.fx, null, `${ticker()} responds to the rumours`);
+      m.done = { idx, at: t, reply: '' };
+      m.read = true;
+      S.risks.push({ msg: m.id, from: 'cfo', at: t + 10 * MIN, market: { id: m.tpl, idx, truth: m.truth } });
+      return { pending: true };
+    }
+    // The truth comes out. A false rumour's move unwinds; then the choice plays out. idx -1: nobody answered.
+    function resolveMarket(r) {
+      const tpl = MARKET[r.market.id], truth = r.market.truth;
+      if (!truth) kick(-tpl.move * 0.6, 'The rumour turns out to be false', r.at);
+      const ch = tpl.choices[r.market.idx];
+      const o = ch ? (truth ? ch.yes : ch.no) : { stock: truth ? tpl.move * 0.5 : 0, text: 'Nobody answered, so the market made up its own mind.' };
+      applyFx({ stock: o.stock, cash: o.cash, teamMood: o.team }, null, o.text);
+      const good = (o.stock || 0) + 0.02 * (o.cash || 0) >= 0;
+      if (good && ch) S.stats.rumoursRight++;
+      message({ kind: 'outcome', from: 'cfo', text: `${truth ? 'The rumour was true.' : 'The rumour was false.'} ${o.text}`, good, ref: r.msg, at: r.at });
+      S.market.ev = null;
+      S.market.next = r.at + (90 + rand() * 120) * MIN;
+      checkAchievements();
     }
 
     // ---------------------------------------------------------------- onboarding & unlocks
@@ -1274,7 +1536,8 @@
     const ach = (id, name, desc, test) => ACH.push({ id, name, desc, test });
     [1, 10, 50, 250, 1000].forEach(n => ach('del' + n, n === 1 ? 'First Delivery' : `${n} Deliveries`, `Deliver ${n} project${n > 1 ? 's' : ''}`, s => s.stats.deliveries >= n));
     [1, 25, 100].forEach(n => ach('five' + n, n === 1 ? 'Client Delighted' : `${n} Five-Star Reviews`, `Earn ${n} five-star review${n > 1 ? 's' : ''}`, s => s.stats.five >= n));
-    [5, 15, D.PEOPLE.length].forEach(n => ach('team' + n, n === D.PEOPLE.length ? 'Full Org Chart' : `Team of ${n}`, n === D.PEOPLE.length ? 'Have every character on the team at once' : `Have ${n} people`, s => Object.keys(s.staff).length >= n));
+    const CORE = D.PEOPLE.length - GUESTS.length;
+    [5, 15, CORE].forEach(n => ach('team' + n, n === CORE ? 'Full Org Chart' : `Team of ${n}`, n === CORE ? 'Have every regular character on the team at once' : `Have ${n} people`, s => D.PEOPLE.filter(p => !p.guest && s.staff[p.id]).length >= n));
     ach('principal', 'Principal Hire', 'Hire a Principal', s => Object.keys(s.staff).some(id => PEOPLE[id].r === 4));
     ach('star5', 'Fully Promoted', 'Promote someone to 5★', s => Object.values(s.staff).some(x => x.stars >= 5));
     ach('bond', 'Inner Circle', 'Reach five hearts with someone', s => Object.values(s.staff).some(x => x.bond >= 100));
@@ -1287,7 +1550,13 @@
     ach('streak7', 'Reliable', 'Hit your commitment 7 days in a row', s => s.streak >= 7);
     [5, 10, 20, 30].forEach(n => ach('career' + n, `Career Level ${n}`, `Reach career level ${n}`, s => s.career.lvl >= n));
     ach('legend', 'Living Legend', 'Hire a Legend', s => Object.keys(s.staff).some(id => PEOPLE[id].r === 5));
-    ach('legends', 'Hall of Fame', 'Have all eight Legends on the team', s => LEGENDS.every(id => s.staff[id]));
+    ach('legends', 'Hall of Fame', 'Have all eight regular Legends on the team', s => LEGENDS.filter(id => !PEOPLE[id].guest).every(id => s.staff[id]));
+    ach('guests', 'Guest List', 'Hire every guest at least once', s => GUESTS.every(id => s.staff[id] || s.alumni[id]));
+    ach('couple', 'Office Romance', 'Have a couple on the team', s => Object.values(s.rels || {}).some(r => r.s === 'dating'));
+    ach('drama10', 'Head of People', 'Settle 10 office dramas', s => (s.stats.dramas || 0) >= 10);
+    ach('swag5', 'Merch Table', 'Own five pieces of swag', s => (s.swag || []).length >= 5);
+    ach('calm10', 'Inner Peace', 'Finish 10 calm breaks', s => (s.stats.calm || 0) >= 10);
+    ach('rumours', 'Market Detective', 'Call five market rumours right', s => (s.stats.rumoursRight || 0) >= 5);
     ach('letgo', 'Restructured', 'Let someone go', s => s.stats.layoffs >= 1);
     ach('rush50', 'Caffeinated', 'Rush 50 projects', s => s.stats.rushes >= 50);
     ach('word', 'Wordsmith', 'Solve the daily word', s => !!s.games.wordLastWin);
@@ -1320,7 +1589,7 @@
         const st = S.staff[id];
         const busy = onProject(id);
         const rest = st.restUntil > t;
-        st.fatigue = Math.max(0, st.fatigue - (dt / 1800) * (1 + 0.5 * lvl('lounge')) * (rest ? 3 : busy ? 0.4 : 1));
+        st.fatigue = Math.max(0, st.fatigue - (dt / 1800) * (1 + 0.5 * lvl('lounge')) * (rest ? 3 : busy ? 0.4 : 1) * (1 + swagFx(id, 'rest')));
         const base = rest ? Math.max(moodBaseline(id), 70) : moodBaseline(id);
         st.mood = clamp(st.mood + (base - st.mood) * (rest ? Math.min(1, k * 3) : k), 0, 100);
         if (st.mood < 12 && !rest && !busy && !legendOwned('morale')) {
@@ -1386,6 +1655,8 @@
       checkRivalsPassing(t);
       processAlumni(t);
       updateStock(t);
+      processMarket(t);
+      processDrama(t);
       scheduleMessages(t, away);
       if (S.tut === 1 && ready(t).length) advanceTut(2);
     }
@@ -1495,7 +1766,8 @@
       openPack, featured, rarityWeights, letGo, letGoBlock, severance, rush, shotCap, addBoost,
       accrue, rate, lastHour, hustle, hustleLevel, hustleMult, callReady, answerCall, missCall,
       wordState, wordGuess, wordAnswer, scoreGuess, gamesReady, gameReadyAt, claimGame, sha256, isoDay,
-      marketCap, capStep, capName, acqTarget, acquire, trailingRevenue, legendOwned,
+      marketCap, capStep, capName, acqTarget, acquire, trailingRevenue, legendOwned, ticker, tickerFor, marketOpen,
+      guestsAt, inPool, GUESTS, swagOf, swagFx, swagCost, openSwag, equipSwag, rel, relsOf, pairMult,
       ACH, PEOPLE, OFFICE, LEGENDS, COMMIT_NAMES, xpNeed: B.xpNeed, repNeed: B.repNeed, addLog,
       panic: () => { S.stats.panics++; checkAchievements(); },
       dayKey, weekStart,

@@ -117,7 +117,30 @@ window.WF_ART = (() => {
       + `<path d="M32 35V37M28.4 37.2Q32 40 35.6 37.2" stroke="#2b2220" stroke-width="1.1" fill="none" stroke-linecap="round"/><path d="M30.3 38.4Q32 43.8 33.7 38.4Z" fill="#ef6f8a"/>`;
   }
 
-  // Returns an inline SVG. opts.mono draws a grey silhouette (for people not hired yet).
+  // ------------------------------------------------------------------ swag, drawn over an avatar in the same 64 × 64 space
+  const SWAG_ART = {
+    beanie: '<path d="M18.5 22.5C18.5 11.5 24.5 7.5 32 7.5S45.5 11.5 45.5 22.5Z" fill="#ef4444"/><path d="M24 12.5Q32 9 40 12.5M21 17Q32 12.5 43 17" stroke="#dc2626" stroke-width="1.2" fill="none"/><rect x="17.5" y="19.5" width="29" height="6" rx="3" fill="#b91c1c"/><circle cx="32" cy="7" r="3.2" fill="#fca5a5"/>',
+    cap: '<path d="M20 21.5C20 12 25.5 9 32 9S44 12 44 21.5Z" fill="#0f766e"/><path d="M29 20H53C53 23 50 24.5 44 24.5H29Z" fill="#115e59"/><circle cx="32" cy="9.5" r="1.4" fill="#134e4a"/><path d="M26.5 15.5H37.5" stroke="#5eead4" stroke-width="1.6" stroke-linecap="round"/>',
+    fedora: '<ellipse cx="32" cy="17.5" rx="19" ry="3.8" fill="#44403c"/><path d="M22.5 17C22.5 9.5 26.5 6.5 32 6.5S41.5 9.5 41.5 17Z" fill="#57534e"/><path d="M29 7.5Q32 9.5 35 7.5" stroke="#44403c" stroke-width="1.2" fill="none"/><rect x="22.5" y="13" width="19" height="3.2" fill="#1c1917"/>',
+    partyhat: '<g transform="rotate(14 32 19)"><path d="M32 1.5L40.5 19H23.5Z" fill="#06b6d4"/><path d="M28.6 9L35.2 12M26.6 14L37.8 18" stroke="#fde047" stroke-width="2"/><circle cx="32" cy="1.8" r="2.6" fill="#f472b6"/></g>',
+    crown: '<path d="M20.5 18L22.5 7.5L27.5 13L32 5.5L36.5 13L41.5 7.5L43.5 18Z" fill="#facc15" stroke="#ca8a04" stroke-width="1" stroke-linejoin="round"/><circle cx="32" cy="14" r="1.6" fill="#ef4444"/><circle cx="25" cy="15" r="1.2" fill="#3b82f6"/><circle cx="39" cy="15" r="1.2" fill="#22c55e"/>',
+    catears: '<path d="M19.5 21Q32 7.5 44.5 21" stroke="#1f2937" stroke-width="2.2" fill="none"/><path d="M20.5 16L21 6.5L28 12.5Z" fill="#1f2937"/><path d="M22 14.5L22.3 9.5L25.8 12.6Z" fill="#f9a8d4"/><path d="M43.5 16L43 6.5L36 12.5Z" fill="#1f2937"/><path d="M42 14.5L41.7 9.5L38.2 12.6Z" fill="#f9a8d4"/>',
+    wizard: '<ellipse cx="32" cy="18" rx="17" ry="3.4" fill="#312e81"/><path d="M23 18C25 12.5 28.5 7 36.5 2C34.5 8 40 12.5 41 18Z" fill="#4338ca"/><path d="M30 10.5L31 12.5L33 12.6L31.5 13.9L32 16L30 14.8L28 16L28.5 13.9L27 12.6L29 12.5Z" fill="#fde047"/><circle cx="35.5" cy="6.5" r="1" fill="#fde047"/>',
+    aviators: '<g fill="#78350f" fill-opacity=".85" stroke="#c99a1e" stroke-width="1.1"><path d="M22.5 25.2H30.8C31 28.5 30 32 26.6 32C23.4 32 22.3 28.8 22.5 25.2Z"/><path d="M41.5 25.2H33.2C33 28.5 34 32 37.4 32C40.6 32 41.7 28.8 41.5 25.2Z"/></g><path d="M30.8 25.6Q32 24.6 33.2 25.6" stroke="#c99a1e" stroke-width="1.1" fill="none"/><path d="M24 26.6H26.5" stroke="#fff" stroke-opacity=".5" stroke-width=".8" stroke-linecap="round"/>',
+    monocle: '<circle cx="36.8" cy="28" r="4.6" fill="#fff" fill-opacity=".2" stroke="#c99a1e" stroke-width="1.4"/><path d="M40.8 30.5Q43.5 37 40.5 44" stroke="#c99a1e" stroke-width=".9" fill="none"/>',
+    bowtie: '<path d="M32 45.5L24.5 41.5V49.5ZM32 45.5L39.5 41.5V49.5Z" fill="#7c3aed"/><rect x="30.2" y="43.6" width="3.6" height="3.8" rx="1.2" fill="#5b21b6"/>',
+    scarf: '<path d="M22.5 42.5C26 47 38 47 41.5 42.5L43 46.5C38.5 51 25.5 51 21 46.5Z" fill="#d97706"/><path d="M34.5 47.5L36.5 58.5L41 57.5L38.8 47Z" fill="#b45309"/><path d="M36 51.5L40 50.8M36.6 54.5L40.6 53.8" stroke="#fcd34d" stroke-width="1"/>',
+    lanyard: '<path d="M26 44L30.5 56.5M38 44L33.5 56.5" stroke="#2563eb" stroke-width="1.8"/><rect x="28" y="55.5" width="8" height="8.5" rx="1.2" fill="#fff" stroke="#93c5fd"/><rect x="29.5" y="57.5" width="5" height="1.6" fill="#2563eb"/><circle cx="27.5" cy="48.5" r="1.6" fill="#f59e0b"/><circle cx="36.8" cy="49" r="1.6" fill="#ef4444"/><circle cx="29" cy="52" r="1.4" fill="#22c55e"/>',
+    chain: '<path d="M24.5 44.5Q32 55 39.5 44.5" stroke="#e0a800" stroke-width="2.2" fill="none" stroke-dasharray="2.2 1.2"/><circle cx="32" cy="51.5" r="3.3" fill="#facc15" stroke="#ca8a04"/><path d="M30.5 51.5H33.5M32 50V53" stroke="#a16207" stroke-width=".8"/>',
+  };
+  // A swag item on a plain grey bust, for the drawer and the box.
+  function swagIcon(key) {
+    return '<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><rect width="64" height="64" fill="#eef1f5"/>'
+      + '<path d="M12 64C12 52 19.5 45.5 27 44.5H37C44.5 45.5 52 52 52 64Z" fill="#d5dbe3"/><path d="M27 37H37V45.5C37 48 27 48 27 45.5Z" fill="#c9d0d9"/><ellipse cx="32" cy="27" rx="12" ry="13.5" fill="#dfe4ea"/>'
+      + (SWAG_ART[key] || '') + '</svg>';
+  }
+
+  // Returns an inline SVG. opts.mono draws a grey silhouette (for people not hired yet). look.swag: what they wear.
   // opts.bare returns only the drawing, with no background, to place inside a larger picture.
   function avatar(look, opts = {}) {
     let inner, bg = '#e8edf3';
@@ -145,6 +168,7 @@ window.WF_ART = (() => {
       parts.push(glasses(look.glasses), accessory(look.acc));
       inner = parts.join('');
     }
+    if (look.swag) inner += SWAG_ART[look.swag] || '';
     if (opts.bare) return inner;
     const filter = opts.mono ? ' style="filter:grayscale(1) brightness(1.15) contrast(.6);opacity:.55"' : '';
     return `<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"${filter}><rect width="64" height="64" fill="${look.bg || bg}"/>${inner}</svg>`;
@@ -199,7 +223,7 @@ window.WF_ART = (() => {
 
   // ------------------------------------------------------------------ blind boxes
 
-  const BOX_COLORS = { single: ['#c99a64', '#d94848'], fair: ['#3b6fd8', '#f2c14e'], legend: ['#e6b422', '#7c3aed'] };
+  const BOX_COLORS = { single: ['#c99a64', '#d94848'], fair: ['#3b6fd8', '#f2c14e'], legend: ['#e6b422', '#7c3aed'], swag: ['#0f766e', '#f2c14e'] };
   function box(kind = 'single') {
     const [c, rb] = BOX_COLORS[kind] || BOX_COLORS.single;
     const d = shade(c, -0.18), l = shade(c, 0.16);
@@ -603,5 +627,5 @@ window.WF_ART = (() => {
       + `<g transform="translate(22 104) scale(4)">${avatar(look, { bare: true })}</g></svg>`;
   }
 
-  return { avatar, logo, gearIcon, roleIcon, moodFace, STAR, floor, spot, zoneSpot, splash, box, chart, chartScale, DESK_COUNT: DESKS.length, FLOOR_W: VB.w, FLOOR_H: VB.h, RARITY_COLORS, shade };
+  return { avatar, swagIcon, logo, gearIcon, roleIcon, moodFace, STAR, floor, spot, zoneSpot, splash, box, chart, chartScale, DESK_COUNT: DESKS.length, FLOOR_W: VB.w, FLOOR_H: VB.h, RARITY_COLORS, shade };
 })();
