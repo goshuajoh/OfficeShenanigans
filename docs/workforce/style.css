@@ -127,8 +127,9 @@ button, .toggle, [data-act] { touch-action: manipulation; -webkit-tap-highlight-
 .next-ico svg { width: 21px; height: 21px; }
 .commit { display: flex; align-items: center; gap: 10px; border: 1px solid var(--border); background: var(--panel); border-radius: 10px; padding: 6px 12px; font-size: 13px; margin-left: auto; cursor: pointer; }
 .commit > svg { width: 16px; height: 16px; color: var(--accent); flex-shrink: 0; }
-.commit .pips { display: flex; gap: 3px; }
-.commit .pips i { width: 8px; height: 8px; border-radius: 2px; background: #e4e7ec; display: block; }
+/* Pips shrink to fit: a Moonshot can ask for 24 deliveries, which is wider than a phone at full size. */
+.commit .pips { display: flex; gap: 3px; flex: 0 1 auto; min-width: 0; }
+.commit .pips i { flex: 0 1 8px; min-width: 3px; height: 8px; border-radius: 2px; background: #e4e7ec; display: block; }
 .commit .pips i.on { background: var(--accent); }
 .commit.done { border-color: #a6e9c9; background: var(--green-soft); color: var(--green); }
 /* the office: an isometric SVG, with people as buttons on top. The sky follows the local time of day. */
